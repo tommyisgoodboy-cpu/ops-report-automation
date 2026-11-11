@@ -4,8 +4,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -14,7 +14,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Generate sample report
         run: PYTHONPATH=src python -m ops_report --db /tmp/tickets.db --out report.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sample-report
           path: report.md
