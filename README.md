@@ -189,6 +189,16 @@ gcloud run deploy ops-report --source . --region asia-east2 --allow-unauthentica
   --max-instances 1 --set-env-vars RATE_LIMIT_TRUST_PROXY=1
 ```
 
+### More security notes
+
+- **Response headers**: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` on every response, plus a Content-Security-Policy on the demo page that blocks framing and any connection except to itself. The policy still allows inline script and style (the page is one file), so it limits damage rather than preventing XSS; the real XSS defence is that answers are inserted with `textContent`, never as HTML.
+- **Privacy**: when Vertex AI does the searching or the writing, every question is sent to Google Cloud. The page says so and asks visitors not to enter personal or confidential information.
+- **Models switched off**: `RAG_LLMS_ON_REQUEST` lists models that exist but are not running here (for example a local model on the author's computer). They appear greyed out and `/ask` rejects them with HTTP 400.
+- **Never expose Ollama**: it has no authentication. Keep it on `127.0.0.1`, do not set `OLLAMA_HOST=0.0.0.0`, and do not put a public tunnel in front of it. To show a local model to someone, share the screen, or protect a tunnel with a login and a time limit.
+- **Spend**: the paid model is opt-in per request, the default is the free original passage, and requests are rate limited per client. A determined attacker can rotate addresses, so the real cap must be set on the cloud side (budget alert and a Vertex AI request quota).
+- **Dependencies are pinned** (`requirements.txt`), and the repository and its full git history were scanned for keys, tokens, phone numbers and personal email addresses (none found).
+- **Known gaps**: the service account is the project's default one, not a dedicated least-privilege account; there are no automated dependency alerts yet.
+
 ## Design notes
 
 - `data.py` generates reproducible synthetic tickets (same seed, same data).

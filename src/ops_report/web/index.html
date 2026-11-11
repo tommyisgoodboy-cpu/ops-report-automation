@@ -60,7 +60,7 @@
     <label>Answer by
       <select id="method" aria-label="How the answer is written"></select>
     </label>
-    <label><input id="compare" type="checkbox"> Compare with the original passage</label>
+    <label id="compareLabel"><input id="compare" type="checkbox"> Compare with the original passage</label>
   </div>
 
   <section id="result" class="card" hidden aria-live="polite">
@@ -81,8 +81,8 @@
   </section>
 
   <p class="note" id="aiNote" hidden>
-    Want to see AI-written answers? They use a local model (Qwen) that runs on my own computer, so I need to
-    start it first. <strong>Just ask me</strong> and I will switch it on for the demo.
+    Some models are switched off. A local model (Qwen) runs on my own computer, so I need to start the server
+    first. <strong>Just ask me</strong> and we can schedule a test.
   </p>
 
   <p class="hint" id="hint">Demo with synthetic data. Answers are the best matching passage from the knowledge base, with sources. See the README.</p>
@@ -95,6 +95,7 @@ const controls = $("controls"), methodSel = $("method"), compareBox = $("compare
 const result = $("result"), answer = $("answer"), badge = $("badge");
 const cmp = $("cmp"), cmpPassage = $("cmpPassage"), cmpAnswer = $("cmpAnswer"), cmpTitle = $("cmpTitle");
 const sources = $("sources"), srcTitle = $("srcTitle"), hint = $("hint");
+const compareLabel = $("compareLabel");
 const labels = {};   // method id -> label, filled from /health
 
 // Ask the server what it really offers. Options the server lacks are never shown.
@@ -108,11 +109,20 @@ fetch("/health").then((r) => r.json()).then((h) => {
     labels[m.id] = m.label;
     const opt = document.createElement("option");
     opt.value = m.id;
-    opt.textContent = m.label;
+    // A model that exists but is switched off stays visible, greyed out, with the reason.
+    opt.disabled = m.available === false;
+    opt.textContent = m.available === false ? m.label + " (switched off: ask me to start it, then we can test)" : m.label;
     methodSel.appendChild(opt);
   });
-  controls.hidden = list.length < 2;   // only "original passage": nothing to choose or compare
-  $("aiNote").hidden = list.length > 1;  // no AI model running here: tell the visitor how to see one
+  const usable = list.filter((m) => m.available !== false);
+  const anyOff = list.some((m) => m.available === false);
+  controls.hidden = list.length < 2;        // only "original passage": nothing to choose or compare
+  compareLabel.hidden = usable.length < 2;  // nothing to compare against unless an AI model can answer
+  $("aiNote").hidden = !(anyOff || usable.length < 2);  // tell visitors how to see a model that is not running
+  // Every question goes to Google when Vertex AI does the searching or the writing.
+  if (h.embedder === "vertex" || usable.some((m) => m.id.startsWith("vertex"))) {
+    hint.textContent += " Questions are processed by Google Cloud (Vertex AI): please do not enter personal or confidential information.";
+  }
 }).catch(() => {});
 
 function setBadge(text, kind) {

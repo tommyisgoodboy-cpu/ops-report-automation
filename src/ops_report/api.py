@@ -64,6 +64,20 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     None reads RATE_LIMIT_PER_MINUTE (default 30); 0 disables the limit.
     """
     app = FastAPI(title="ops-report-automation", version="0.2.0")
+
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path == "/":  # the demo page only; /docs (Swagger UI) loads its own assets
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+                "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            )
+        return response
     if rate_limit is None:
         rate_limit = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "30"))
     trust_proxy = os.environ.get("RATE_LIMIT_TRUST_PROXY") == "1"
@@ -93,6 +107,15 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
         llm = make_llm(spec)
         provider = parse_llm_spec(spec)[0]
         methods[spec] = (llm, f"{PROVIDER_LABELS.get(provider, provider)}: {llm.model}")
+    # Models that exist but are switched off here (for example a local model that runs on the author's
+    # own computer). They are listed so visitors can see them, but they cannot be called.
+    # RAG_LLMS_ON_REQUEST = comma list of "provider:model".
+    switched_off: dict[str, str] = {}
+    for spec in (os.environ.get("RAG_LLMS_ON_REQUEST") or "").replace(" ", "").split(","):
+        if spec and spec not in methods:
+            llm = make_llm(spec)
+            provider = parse_llm_spec(spec)[0]
+            switched_off[spec] = f"{PROVIDER_LABELS.get(provider, provider)}: {llm.model}"
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))
@@ -106,7 +129,8 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
         return {
             "status": "ok",
             "embedder": embedder_name,
-            "answer_methods": [{"id": k, "label": label} for k, (_, label) in methods.items()],
+            "answer_methods": [{"id": k, "label": label, "available": True} for k, (_, label) in methods.items()]
+            + [{"id": k, "label": label, "available": False} for k, label in switched_off.items()],
         }
 
     @app.get("/report", response_class=PlainTextResponse, dependencies=[limited])
@@ -137,6 +161,8 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
 
     @app.post("/ask", response_model=AskOut, dependencies=[limited])
     def ask(body: AskIn) -> dict:
+        if body.method in switched_off:
+            raise HTTPException(status_code=400, detail="This model is switched off. Ask the author to switch it on.")
         if body.method not in methods:
             raise HTTPException(status_code=400, detail=f"Unknown answer method. Use one of: {', '.join(methods)}")
         try:
