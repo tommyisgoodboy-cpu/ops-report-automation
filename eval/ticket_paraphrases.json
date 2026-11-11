@@ -1,0 +1,194 @@
+[
+ {
+  "q": "my screen goes black and flashes",
+  "category": "Hardware"
+ },
+ {
+  "q": "the device is completely dead and the charger light is off",
+  "category": "Hardware"
+ },
+ {
+  "q": "some keys on my keyboard are stuck",
+  "category": "Hardware"
+ },
+ {
+  "q": "the cursor jumps around by itself",
+  "category": "Hardware"
+ },
+ {
+  "q": "my monitor shows no picture at all",
+  "category": "Hardware"
+ },
+ {
+  "q": "laptop will not start after I plugged it into the dock",
+  "category": "Hardware"
+ },
+ {
+  "q": "部電腦開唔着機",
+  "category": "Hardware"
+ },
+ {
+  "q": "個螢幕閃閃下",
+  "category": "Hardware"
+ },
+ {
+  "q": "鍵盤打唔到字",
+  "category": "Hardware"
+ },
+ {
+  "q": "Excel freezes whenever I open a big file",
+  "category": "Software"
+ },
+ {
+  "q": "I cannot install the new program",
+  "category": "Software"
+ },
+ {
+  "q": "Outlook closes by itself every few minutes",
+  "category": "Software"
+ },
+ {
+  "q": "the app update keeps failing",
+  "category": "Software"
+ },
+ {
+  "q": "Word keeps crashing when I save",
+  "category": "Software"
+ },
+ {
+  "q": "Excel 一開就 crash",
+  "category": "Software"
+ },
+ {
+  "q": "裝唔到個軟件",
+  "category": "Software"
+ },
+ {
+  "q": "Outlook 成日彈走",
+  "category": "Software"
+ },
+ {
+  "q": "wireless keeps cutting out",
+  "category": "Network"
+ },
+ {
+  "q": "cannot reach the company network from home",
+  "category": "Network"
+ },
+ {
+  "q": "the internet is very slow in the meeting room",
+  "category": "Network"
+ },
+ {
+  "q": "my VPN keeps dropping",
+  "category": "Network"
+ },
+ {
+  "q": "I cannot open the shared folder on the server",
+  "category": "Network"
+ },
+ {
+  "q": "VPN 成日斷線",
+  "category": "Network"
+ },
+ {
+  "q": "Wi-Fi 好慢",
+  "category": "Network"
+ },
+ {
+  "q": "連唔到公司網絡",
+  "category": "Network"
+ },
+ {
+  "q": "I can't sign in to my PC",
+  "category": "Access"
+ },
+ {
+  "q": "I forgot my password",
+  "category": "Access"
+ },
+ {
+  "q": "my account got locked out",
+  "category": "Access"
+ },
+ {
+  "q": "I need access to a team mailbox",
+  "category": "Access"
+ },
+ {
+  "q": "I am not allowed to open the project folder",
+  "category": "Access"
+ },
+ {
+  "q": "我唔記得密碼",
+  "category": "Access"
+ },
+ {
+  "q": "個戶口被鎖咗",
+  "category": "Access"
+ },
+ {
+  "q": "入唔到我個電郵",
+  "category": "Access"
+ },
+ {
+  "q": "the printer jammed",
+  "category": "Printer"
+ },
+ {
+  "q": "prints come out very faint",
+  "category": "Printer"
+ },
+ {
+  "q": "the printer does not respond",
+  "category": "Printer"
+ },
+ {
+  "q": "we need a new toner cartridge",
+  "category": "Printer"
+ },
+ {
+  "q": "I cannot send anything to the printer",
+  "category": "Printer"
+ },
+ {
+  "q": "打印機連唔到",
+  "category": "Printer"
+ },
+ {
+  "q": "打印出嚟好淡",
+  "category": "Printer"
+ },
+ {
+  "q": "卡紙",
+  "category": "Printer"
+ },
+ {
+  "q": "my virtual machine is sluggish",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "remote desktop session disconnects right after login",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "the VM will not start",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "the snapshot is taking all the disk space",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "I cannot connect to my virtual desktop",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "虛擬機好慢",
+  "category": "Virtualisation"
+ },
+ {
+  "q": "虛擬桌面登入後斷線",
+  "category": "Virtualisation"
+ }
+]

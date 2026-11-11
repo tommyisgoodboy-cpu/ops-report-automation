@@ -85,6 +85,30 @@ The image runs as a non-root user and reads `$PORT` (default 8080), so it runs u
 
 **Known limitation (on purpose, and tested by hand):** TF-IDF matches words, not meaning. "I can't sign in to my PC" retrieves a virtual-desktop *login* article instead of the locked-account article, because it shares a word and not the idea. The `Embedder` interface exists so a neural embedding model (for example a local `bge-m3` via Ollama, or a hosted API) can replace it without touching retrieval or the API. Next step: swap it in and compare accuracy on a small labelled question set, the same way the classifier is compared with its baseline.
 
+### Training a ticket classifier
+
+So far every model was used as it came. This is the one place where something is trained: ticket summary to category (Hardware, Software, Network, Access, Printer, Virtualisation). `python -m ops_report.train_eval` compares the hand-written keyword rules with two trained models, using only the standard library:
+
+- **Naive Bayes** over words and Chinese character pairs. Training is counting.
+- **Embedding centroid**: embed each training sentence and average per category. Training is averaging; prediction is the nearest category.
+
+**The data problem.** The 300 synthetic tickets contain only **19 distinct sentences** (3 or 4 per category), repeated. Scoring a model on sentences it was trained on proves nothing, so the table has three views:
+
+| Model | In-sample (same sentences) | Leave one sentence out | 48 new paraphrases (English and Cantonese) |
+|---|---:|---:|---:|
+| Keyword rules, no training | 95% | n/a (not trained) | **50%** |
+| Naive Bayes | 100% | **9%** | 48% |
+| Embedding centroid, bge-m3 (local) | 100% | 50% | **92%** |
+| Embedding centroid, Vertex AI multilingual | 100% | 68% | **96%** |
+
+What it shows:
+- **Naive Bayes memorised instead of learning.** It is perfect on the sentences it saw and almost useless on one it did not: with 2 or 3 sentences per category the words never overlap. In-sample accuracy would have made it look like the best model.
+- **The keyword rules fall from 95% to 50% on new wording.** Their 95% is inflated: the keyword list was written while looking at these very sentences.
+- **Embeddings carry the meaning, so averaging 3 or 4 sentences already generalises** (92 to 96% on paraphrases, including Cantonese, which the keyword rules and Naive Bayes cannot read).
+- The remaining errors are mostly ambiguous labels: "I cannot open the shared folder on the server" was labelled Network (it resembles a Network training sentence) but reads like an Access problem.
+
+Limits, plainly: the 48 paraphrases are small (one sentence is about two points), I wrote them knowing the keyword list, and the labels are my own judgement. Everything is synthetic, so this says nothing about real tickets. Leave-one-out is harsh because removing one of 3 or 4 sentences removes a quarter of the signal for that category. Next steps that would matter more than more tuning: real labelled tickets, and generating many varied training sentences with an LLM (then checking a sample by hand).
+
 ### Measuring retrieval
 
 `eval/questions.json` holds 28 labelled questions: 5 literal, 9 paraphrased, 6 Cantonese or mixed Chinese/English, and 8 out of scope (3 unrelated topics plus 8 chit-chat such as "hi" and "help", added after a visitor typed "hi" and got a random article). Run:
@@ -265,6 +289,7 @@ Accepted limits of this design:
 - [x] Neural embeddings in the deployed service (Vertex AI, keyless)
 - [x] LLM answer generation verified locally with Qwen 2.5 7B (Ollama)
 - [x] Gemini backend verified on Cloud Run (gemini-3.8-flash, global)
+- [x] Trained classifiers (Naive Bayes, embedding centroid) compared with the keyword baseline on unseen wording
 - [ ] LLM-based classifier compared with the baseline on the same labels
 - [ ] Treat overdue open tickets as SLA breaches
 - [ ] HTML report and a scheduled daily run
