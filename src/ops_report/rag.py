@@ -22,6 +22,7 @@ from typing import Protocol
 from . import gcp
 
 KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
+MIN_QUESTION_CHARS = 5  # "hi", "help", "你好" carry no problem to search for; ask for detail instead
 _WORD = re.compile(r"[a-z0-9]+")
 _STOP = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "is", "it", "for", "with",
@@ -124,9 +125,9 @@ class VertexEmbedder:
     retrieval models are trained to expect.
     """
 
-    # Between the weakest correct match (0.60) and the strongest out-of-scope match (0.45) on the
-    # labelled questions in eval/. Tuned on the same questions, so confirm with fresh ones.
-    default_min_score = 0.52
+    # Above the chit-chat scores seen so far (0.50-0.56) and below the weakest correct match (0.60)
+    # on the labelled questions in eval/. Tuned on the same questions, so confirm with fresh ones.
+    default_min_score = 0.57
 
     def __init__(self, model: str | None = None, location: str | None = None):
         self.model = model or os.environ.get("VERTEX_EMBED_MODEL", "text-multilingual-embedding-002")
@@ -187,12 +188,18 @@ class Retriever:
         self.vectors = self.embedder.embed(texts)
 
     def search(self, question: str, k: int = 3, min_score: float | None = None) -> list[tuple[Chunk, float]]:
+        if too_short(question):
+            return []
         threshold = self.min_score if min_score is None else min_score
         embed_query = getattr(self.embedder, "embed_query", None)
         q = embed_query(question) if embed_query else self.embedder.embed([question])[0]
         scored = [(c, cosine(q, v)) for c, v in zip(self.chunks, self.vectors)]
         scored = [(c, s) for c, s in scored if s >= threshold]
         return sorted(scored, key=lambda cs: cs[1], reverse=True)[:k]
+
+
+def too_short(question: str) -> bool:
+    return len(question.strip()) < MIN_QUESTION_CHARS
 
 
 def build_prompt(question: str, hits: list[tuple[Chunk, float]]) -> str:
@@ -282,6 +289,9 @@ def answer(question: str, retriever: Retriever, k: int = 3, llm=None) -> dict:
     from the retrieved context. If the LLM fails, fall back to the best chunk's text, so the
     service keeps working. `mode` says which path produced the answer.
     """
+    if too_short(question):
+        return {"question": question, "mode": "extractive", "sources": [],
+                "answer": "Please describe the problem in a few words, for example: VPN keeps disconnecting."}
     hits = retriever.search(question, k=k)
     if not hits:
         return {"question": question, "answer": "I do not know. No relevant article found.",

@@ -113,5 +113,45 @@
     "type": "out_of_scope",
     "q": "best pizza near me",
     "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "hi",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "hello",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "你好",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "thanks",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "多謝",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "test",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "help",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "asdfgh",
+    "expect": null
   }
 ]

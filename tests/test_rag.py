@@ -37,6 +37,15 @@ class RagTests(unittest.TestCase):
         out = answer("printer shows offline", Retriever())
         self.assertEqual(out["sources"][0]["doc"], "printer.md")
 
+    def test_too_short_question_asks_for_detail_without_searching(self):
+        out = answer("hi", Retriever())
+        self.assertEqual(out["sources"], [])
+        self.assertIn("describe the problem", out["answer"])
+        self.assertEqual(Retriever().search("你好"), [])
+
+    def test_short_but_real_questions_still_work(self):
+        self.assertEqual(Retriever().search("VPN keeps dropping")[0][0].doc, "vpn.md")
+
 
 if __name__ == "__main__":
     unittest.main()

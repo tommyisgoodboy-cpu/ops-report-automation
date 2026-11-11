@@ -87,7 +87,7 @@ The image runs as a non-root user and reads `$PORT` (default 8080), so it runs u
 
 ### Measuring retrieval
 
-`eval/questions.json` holds 20 labelled questions: 5 literal, 9 paraphrased, 6 Cantonese or mixed Chinese/English, plus 3 out of scope. Run:
+`eval/questions.json` holds 28 labelled questions: 5 literal, 9 paraphrased, 6 Cantonese or mixed Chinese/English, and 8 out of scope (3 unrelated topics plus 8 chit-chat such as "hi" and "help", added after a visitor typed "hi" and got a random article). Run:
 
 ```bash
 PYTHONPATH=src python -m ops_report.rag_eval                    # TF-IDF baseline
@@ -101,13 +101,14 @@ PYTHONPATH=src python -m ops_report.rag_eval --embedder ollama  # neural embeddi
 | paraphrased wording | 44% | 89% | **100%** |
 | Cantonese / mixed | 33% | 100% | 100% |
 | top-3, answerable | 65% | 100% | 100% |
-| refuses out-of-scope (3) | 100% | 100% | 100% |
+| refuses out-of-scope (11) | 100% | 100% | 100% |
 
 TF-IDF cannot read Chinese at all (its tokenizer keeps only `[a-z0-9]`) and scores unrelated paraphrases at zero. The two neural models are multilingual, so a Cantonese question finds the English article.
 
 Caveats, stated plainly:
 - 20 questions is small and I wrote them while looking at the knowledge base. **100% on 20 questions is not a claim that retrieval is solved**, only that none of these fail. Treat the numbers as direction, not a benchmark.
-- The refuse thresholds (0.5 for bge-m3, 0.52 for Vertex) sit in the gap between the weakest correct match and the strongest out-of-scope match **on these same questions**. They are tuned on the evaluation set and need fresh questions to confirm.
+- The refuse thresholds (0.5 for bge-m3, 0.57 for Vertex) sit in the gap between the weakest correct match and the strongest out-of-scope match **on these same questions**. They are tuned on the evaluation set and need fresh questions to confirm.
+- **A score threshold alone cannot separate chit-chat from real questions.** With Vertex, "hi" scored 0.54 and "help" 0.60, while the weakest correct match was 0.60. I checked whether the gap between the top and third result would help: it does not, because some real questions have a gap as small as 0.02. What I did instead: questions shorter than 5 characters get "please describe the problem" without searching, and the Vertex threshold went from 0.52 to 0.57. Longer vague messages (for example "help me please") can still return a weak match. A proper fix needs an intent check or an LLM judging whether the passage answers the question.
 - bge-m3 still misses one question ("I can't sign in to my PC" returns the VPN article; the right one is in its top 3).
 
 ### Choosing the embedder and the answer mode
