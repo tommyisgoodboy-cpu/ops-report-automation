@@ -124,7 +124,9 @@ class VertexEmbedder:
     retrieval models are trained to expect.
     """
 
-    default_min_score = 0.5  # provisional; set from the score distribution in eval/ (see README)
+    # Between the weakest correct match (0.60) and the strongest out-of-scope match (0.45) on the
+    # labelled questions in eval/. Tuned on the same questions, so confirm with fresh ones.
+    default_min_score = 0.52
 
     def __init__(self, model: str | None = None, location: str | None = None):
         self.model = model or os.environ.get("VERTEX_EMBED_MODEL", "text-multilingual-embedding-002")

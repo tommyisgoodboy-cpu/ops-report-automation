@@ -4,11 +4,12 @@ Run: uvicorn ops_report.api:app --reload   (needs `pip install -r requirements.t
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -56,7 +57,12 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     app = FastAPI(title="ops-report-automation", version="0.2.0")
     # Chunk and embed the knowledge base once at startup, not on every question.
     # RAG_EMBEDDER = tfidf (default) | ollama (local) | vertex (Google Cloud, no key needed on Cloud Run)
-    retriever = Retriever(embedder=make_embedder(os.environ.get("RAG_EMBEDDER")))
+    embedder_name = (os.environ.get("RAG_EMBEDDER") or "tfidf").lower()
+    try:
+        retriever = Retriever(embedder=make_embedder(embedder_name))
+    except Exception as exc:  # noqa: BLE001 - an external dependency must not stop the service booting
+        logging.getLogger(__name__).warning("Embedder %r unavailable (%s); falling back to tfidf", embedder_name, exc)
+        embedder_name, retriever = "tfidf", Retriever()
     # RAG_LLM = none (default, returns the best passage) | vertex (Gemini writes the answer from the passages)
     llm = make_llm(os.environ.get("RAG_LLM"))
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
@@ -69,7 +75,7 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok"}
+        return {"status": "ok", "embedder": embedder_name}
 
     @app.get("/report", response_class=PlainTextResponse)
     def report() -> str:
@@ -99,7 +105,11 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
 
     @app.post("/ask", response_model=AskOut)
     def ask(body: AskIn) -> dict:
-        return answer(body.question, retriever, k=body.k, llm=llm)
+        try:
+            return answer(body.question, retriever, k=body.k, llm=llm)
+        except RuntimeError as exc:  # e.g. the embedding service is unreachable
+            logging.getLogger(__name__).error("ask failed: %s", exc)
+            raise HTTPException(status_code=503, detail="Retrieval service temporarily unavailable") from exc
 
     return app
 

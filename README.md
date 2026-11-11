@@ -8,8 +8,8 @@ Turns raw IT-support tickets into a daily operations report (volume by category,
 |---|---|
 | Data and report | Synthetic tickets, SQLite, plain SQL, Markdown report, rule-based classifier |
 | API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, plus a small web page at `/` |
-| RAG | Chunking, embeddings (TF-IDF or bge-m3 via Ollama), cosine retrieval, sources, refusal, measured on labelled questions |
-| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 28 tests |
+| RAG | Chunking, embeddings (TF-IDF, bge-m3 via Ollama, or Vertex AI), cosine retrieval, sources, refusal, measured on labelled questions |
+| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 36 tests |
 
 > **All data is synthetic.** Tickets are generated with a fixed random seed. No real customer, employer or government data is used or stored.
 >
@@ -94,22 +94,34 @@ PYTHONPATH=src python -m ops_report.rag_eval                    # TF-IDF baselin
 PYTHONPATH=src python -m ops_report.rag_eval --embedder ollama  # neural embeddings
 ```
 
-| Metric | TF-IDF | bge-m3 (Ollama) |
-|---|---:|---:|
-| top-1, answerable (17) | 55% | **95%** |
-| literal wording | 100% | 100% |
-| paraphrased wording | 44% | **89%** |
-| Cantonese / mixed | 33% | **100%** |
-| top-3, answerable | 65% | **100%** |
-| refuses out-of-scope (3) | 100% | 100% |
+| Metric | TF-IDF | bge-m3 (Ollama, local) | Vertex AI multilingual |
+|---|---:|---:|---:|
+| top-1, answerable (17) | 55% | 95% | **100%** |
+| literal wording | 100% | 100% | 100% |
+| paraphrased wording | 44% | 89% | **100%** |
+| Cantonese / mixed | 33% | 100% | 100% |
+| top-3, answerable | 65% | 100% | 100% |
+| refuses out-of-scope (3) | 100% | 100% | 100% |
 
-TF-IDF cannot read Chinese at all (its tokenizer keeps only `[a-z0-9]`), and it scores unrelated paraphrases at zero. `bge-m3` is multilingual, so a Cantonese question finds the English article.
+TF-IDF cannot read Chinese at all (its tokenizer keeps only `[a-z0-9]`) and scores unrelated paraphrases at zero. The two neural models are multilingual, so a Cantonese question finds the English article.
 
 Caveats, stated plainly:
-- 20 questions is small, and I wrote them while looking at the knowledge base, so treat the numbers as direction, not a benchmark.
-- The refuse threshold for `bge-m3` (0.5) sits in the gap between the weakest correct match (0.54) and the strongest out-of-scope match (0.36) **on these same questions**. It is tuned on the evaluation set and needs fresh questions to confirm.
-- One question still fails at top-1: "I can't sign in to my PC" returns the VPN article (the right one is in the top 3).
-- The Cloud Run demo still uses TF-IDF, because the container has no Ollama. To use neural embeddings locally: `ollama pull bge-m3`, then `RAG_EMBEDDER=ollama PYTHONPATH=src uvicorn ops_report.api:app`.
+- 20 questions is small and I wrote them while looking at the knowledge base. **100% on 20 questions is not a claim that retrieval is solved**, only that none of these fail. Treat the numbers as direction, not a benchmark.
+- The refuse thresholds (0.5 for bge-m3, 0.52 for Vertex) sit in the gap between the weakest correct match and the strongest out-of-scope match **on these same questions**. They are tuned on the evaluation set and need fresh questions to confirm.
+- bge-m3 still misses one question ("I can't sign in to my PC" returns the VPN article; the right one is in its top 3).
+
+### Choosing the embedder and the answer mode
+
+| Variable | Values | Effect |
+|---|---|---|
+| `RAG_EMBEDDER` | `tfidf` (default), `ollama`, `vertex` | How chunks and questions become vectors |
+| `RAG_LLM` | `none` (default), `vertex` | `none` returns the best passage; `vertex` has Gemini write the answer from the retrieved passages, with `[1]` citations |
+
+- **No keys in code.** On Cloud Run the service gets a short-lived token from the metadata server for its service account. Locally it uses `gcloud auth print-access-token`. The service account needs `roles/aiplatform.user`.
+- **The service keeps working if a dependency fails.** If the chosen embedder cannot start, it falls back to TF-IDF and `/health` reports which embedder is active. If the LLM call fails, the answer falls back to the best passage (`"mode": "extractive"`). A retrieval failure during a question returns 503.
+- When nothing relevant is retrieved, the LLM is not called at all and the answer is "I do not know".
+- Local Python from python.org may lack root certificates; point `SSL_CERT_FILE` at `certifi.where()` if HTTPS calls fail with `CERTIFICATE_VERIFY_FAILED`.
+- **Status of LLM generation:** the code path is tested with a fake LLM. I could not verify it against a real Gemini model: on my new Google Cloud project every Gemini model name returned 404 ("not found or no access"), while the embedding model on the same API worked. Likely an access or terms setting on the project, not a code problem, but I have not confirmed that.
 
 ## Deploy to Google Cloud Run
 
@@ -146,8 +158,8 @@ Set a budget alert on the billing account first.
 - [x] HTTP API (FastAPI) with tests
 - [x] RAG baseline (TF-IDF retrieval, sources, refuses unknown topics)
 - [x] Neural embeddings (bge-m3 via Ollama) compared with TF-IDF on a labelled question set
-- [ ] Neural embeddings in the deployed service (hosted embedding API or a container with a model)
-- [ ] LLM answer generation on top of retrieval
+- [x] Neural embeddings in the deployed service (Vertex AI, keyless)
+- [ ] Verify LLM answer generation against a real model (code and tests exist; project access to Gemini unresolved)
 - [ ] LLM-based classifier compared with the baseline on the same labels
 - [ ] Treat overdue open tickets as SLA breaches
 - [ ] HTML report and a scheduled daily run

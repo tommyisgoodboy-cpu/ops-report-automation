@@ -27,7 +27,7 @@ class ApiTests(unittest.TestCase):
     def test_health(self):
         r = self.client.get("/health")
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json(), {"status": "ok"})
+        self.assertEqual(r.json(), {"status": "ok", "embedder": "tfidf"})
 
     def test_report_is_markdown_with_ticket_count(self):
         r = self.client.get("/report")
@@ -75,6 +75,23 @@ class ApiTests(unittest.TestCase):
     def test_ask_validates_input(self):
         self.assertEqual(self.client.post("/ask", json={"question": ""}).status_code, 422)
         self.assertEqual(self.client.post("/ask", json={"question": "vpn", "k": 99}).status_code, 422)
+
+    def test_unavailable_embedder_at_startup_falls_back_to_tfidf(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"RAG_EMBEDDER": "ollama"}), \
+             mock.patch("ops_report.rag.OllamaEmbedder.embed", side_effect=RuntimeError("down")):
+            client = TestClient(create_app(n_tickets=10))
+        self.assertEqual(client.get("/health").json()["embedder"], "tfidf")
+        self.assertEqual(client.post("/ask", json={"question": "printer offline"}).status_code, 200)
+
+    def test_embedding_failure_during_a_question_returns_503(self):
+        from unittest import mock
+
+        with mock.patch("ops_report.api.answer", side_effect=RuntimeError("down")):
+            r = self.client.post("/ask", json={"question": "printer offline"})
+        self.assertEqual(r.status_code, 503)
 
 
 if __name__ == "__main__":
