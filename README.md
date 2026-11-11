@@ -2,7 +2,7 @@
 
 Turns raw IT-support tickets into a daily operations report (volume by category, MTTR and SLA breach rate by priority, repeating issues), serves it over a small HTTP API, and answers troubleshooting questions from a knowledge base with retrieval-augmented generation (RAG).
 
-**Live demo:** https://ops-report-1015015901936.asia-east2.run.app/ (Cloud Run, scales to zero, so the first request can be slow)
+**Live demo:** https://ops-report-1015015901936.asia-east2.run.app/ (Cloud Run, scales to zero, so the first request can be slow; retrieval uses Vertex AI multilingual embeddings, so Cantonese questions work; `/health` shows the active embedder)
 
 | Layer | What |
 |---|---|
