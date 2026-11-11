@@ -221,10 +221,27 @@ gcloud run deploy ops-report --source . --region asia-east2 --allow-unauthentica
 - **Privacy**: when Vertex AI does the searching or the writing, every question is sent to Google Cloud. The page says so and asks visitors not to enter personal or confidential information.
 - **Models switched off**: `RAG_LLMS_ON_REQUEST` lists models that exist but are not running here (for example a local model on the author's computer). They appear greyed out and `/ask` rejects them with HTTP 400.
 - **Never expose Ollama**: it has no authentication. Keep it on `127.0.0.1`, do not set `OLLAMA_HOST=0.0.0.0`, and do not put a public tunnel in front of it. To show a local model to someone, share the screen, or protect a tunnel with a login and a time limit.
-- **Spend**: the paid model is opt-in per request, the default is the free original passage, requests are rate limited per client, and paid answers have a daily cap (`LLM_DAILY_LIMIT`, default 200; the API falls back to the original passage when it is reached). The cap is in memory per instance, so it resets when the service restarts: it is an extra layer, not a billing guarantee. I looked for a cloud-side cap and found none to lower: for these Gemini models the project has no per-minute request quota (the value is empty, which is why the console quota page lists nothing), and the daily token quota defaults to billions. So the cloud-side controls are a budget alert (it notifies, it does not stop spending) and, on a free-trial account, the credit itself.
+- **Spend**: the paid model is opt-in per request, the default is the free original passage, requests are rate limited per client, paid answers have a daily cap (`LLM_DAILY_LIMIT`, default 200; the API falls back to the original passage when it is reached), and so do paid question embeddings (`EMBED_DAILY_LIMIT`, default 3000; retrieval falls back to TF-IDF, also when Vertex is down). The cap is in memory per instance, so it resets when the service restarts: it is an extra layer, not a billing guarantee. I looked for a cloud-side cap and found none to lower: for these Gemini models the project has no per-minute request quota (the value is empty, which is why the console quota page lists nothing), and the daily token quota defaults to billions. So the cloud-side controls are a budget alert (it notifies, it does not stop spending) and, on a free-trial account, the credit itself.
 - **Dependencies are pinned** (`requirements.txt`), and the repository and its full git history were scanned for keys, tokens, phone numbers and personal email addresses (none found).
 - **Dependency alerts**: Dependabot checks pip, GitHub Actions and the Docker base image weekly, and CI runs `pip-audit` on the pinned versions on every push.
 - **Least-privilege runtime identity**: the Cloud Run service runs as a dedicated service account (`ops-report-runtime`) that has only `roles/aiplatform.user`. It is not the project's default compute account. Source deploys still build with the default account, which keeps its build role. A new binding can take a few minutes to propagate: my first test of the new account failed with a 403 and the service fell back to TF-IDF, then worked after a new revision. That fallback is why a permission problem showed up in `/health` instead of taking the site down.
+
+### Remaining risks
+
+Open, for the owner to do:
+- GitHub Dependabot alerts are not enabled (a repository setting). The weekly Dependabot update PRs and the `pip-audit` step in CI are active.
+- The project's default compute service account still has the Vertex AI role next to the dedicated runtime account, and it keeps a broad Cloud Build role because source deploys build with it.
+- The budget alert only notifies. Whether the account is still on a free trial (where the credit is the real limit) is not something I could verify.
+- `main` has no branch protection. That is acceptable for one maintainer; add it if others commit.
+
+Accepted limits of this design:
+- **Counters live in memory** (rate limit, daily caps). They reset when the instance restarts, so they bound a day's spend per instance, not forever.
+- **Per-IP limits do not stop a distributed attacker.** The daily caps bound the cost, and the price is availability: someone can use up the day's AI answers and everyone else falls back to the original passage.
+- **The chat history comes from the browser**, so a caller can forge earlier "assistant" messages. The prompts carry no secrets and the model has no tools, so the worst case is a strange answer shown to the caller who asked for it.
+- **Prompt injection cannot be fully prevented.** The mitigations are the prompt rules, JSON validation, no tools, text-only rendering and the knowledge base being fixed in the repository.
+- **Dependencies are only partly locked**: the three direct ones are pinned, the transitive ones are not, so a rebuild can pick up newer ones. GitHub Actions are pinned by version tag, not commit hash, and the Docker base image by tag, not digest.
+- **Cloud Logging keeps request metadata, including visitor IP addresses.** Together with questions being sent to Google (disclosed on the page), this matters if real users ever use it.
+- There is no login or CAPTCHA: it is an open demo with synthetic data.
 
 ## Design notes
 

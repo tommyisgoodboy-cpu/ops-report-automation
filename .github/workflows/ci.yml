@@ -1,5 +1,10 @@
 name: ci
 on: [push, pull_request]
+
+# The workflow only reads the repository; it needs no write access or secrets.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

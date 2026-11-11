@@ -17,8 +17,8 @@ from . import db
 from .classify import classify
 from .data import generate_tickets
 from .ratelimit import RateLimiter, make_limit_dependency
-from .rag import (MAX_HISTORY_MESSAGES, PAID_PROVIDERS, PROVIDER_LABELS, CappedLLM, Retriever, answer, chat_turn,
-                  list_ollama_models, make_embedder, make_llm, parse_llm_spec)
+from .rag import (MAX_HISTORY_MESSAGES, PAID_PROVIDERS, PROVIDER_LABELS, CappedEmbedder, CappedLLM, FallbackRetriever,
+                  Retriever, answer, chat_turn, list_ollama_models, make_embedder, make_llm, parse_llm_spec)
 from .report import build_report
 
 WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
@@ -108,10 +108,17 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     # RAG_EMBEDDER = tfidf (default) | ollama (local) | vertex (Google Cloud, no key needed on Cloud Run)
     embedder_name = (os.environ.get("RAG_EMBEDDER") or "tfidf").lower()
     try:
-        retriever = Retriever(embedder=make_embedder(embedder_name))
+        embedder = make_embedder(embedder_name)
+        embed_limit = int(os.environ.get("EMBED_DAILY_LIMIT", "3000"))  # paid embedders only; 0 turns it off
+        if embedder is not None and embedder_name == "vertex" and embed_limit > 0:
+            embedder = CappedEmbedder(embedder, embed_limit)
+        retriever = Retriever(embedder=embedder)
     except Exception as exc:  # noqa: BLE001 - an external dependency must not stop the service booting
         logging.getLogger(__name__).warning("Embedder %r unavailable (%s); falling back to tfidf", embedder_name, exc)
         embedder_name, retriever = "tfidf", Retriever()
+    if embedder_name != "tfidf":
+        # If the neural embedder fails later (outage, daily cap), keep answering with plain TF-IDF.
+        retriever = FallbackRetriever(retriever, Retriever(retriever.chunks))
     # Answer methods this server offers. "passage" (the original best passage) is always there.
     # RAG_LLMS = comma list of "provider" or "provider:model", for example
     #   ollama:*                    every model downloaded in the local Ollama (found at startup)

@@ -167,6 +167,55 @@ def cosine(a, b) -> float:
     return sum(x * y for x, y in zip(a, b))  # dense
 
 
+class CappedEmbedder:
+    """Wraps a paid embedder and refuses question embeddings once `limit` have been made today (UTC).
+
+    Only questions count (the knowledge base is embedded once at startup). In memory, so it resets on restart:
+    an extra layer, not a billing guarantee.
+    """
+
+    def __init__(self, inner, limit: int, today=lambda: datetime.datetime.now(datetime.timezone.utc).date()):
+        self.inner, self.limit, self._today = inner, limit, today
+        self._day, self._count, self._lock = None, 0, threading.Lock()
+
+    @property
+    def default_min_score(self):
+        return self.inner.default_min_score
+
+    def embed(self, texts):
+        return self.inner.embed(texts)
+
+    def embed_query(self, text):
+        with self._lock:
+            day = self._today()
+            if day != self._day:
+                self._day, self._count = day, 0
+            if self._count >= self.limit:
+                raise RuntimeError(f"Daily limit of {self.limit} question embeddings reached")
+            self._count += 1
+        embed_query = getattr(self.inner, "embed_query", None)
+        return embed_query(text) if embed_query else self.inner.embed([text])[0]
+
+
+class FallbackRetriever:
+    """Searches with the main retriever and, if that fails (service down, daily cap reached), with a
+    simple TF-IDF one built from the same chunks. Quality drops a little, but the service keeps answering."""
+
+    def __init__(self, primary, fallback):
+        self.primary, self.fallback = primary, fallback
+
+    @property
+    def chunks(self):
+        return self.primary.chunks
+
+    def search(self, question, k=3, min_score=None):
+        try:
+            return self.primary.search(question, k=k, min_score=min_score)
+        except RuntimeError as exc:
+            logging.getLogger(__name__).warning("Main retrieval failed, using TF-IDF: %s", exc)
+            return self.fallback.search(question, k=k, min_score=min_score)
+
+
 def make_embedder(name: str | None = None):
     """'tfidf' (default, None) | 'ollama' | 'vertex'. Selected by RAG_EMBEDDER in the API."""
     name = (name or "tfidf").lower()
