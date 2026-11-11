@@ -9,7 +9,7 @@ Turns raw IT-support tickets into a daily operations report (volume by category,
 | Data and report | Synthetic tickets, SQLite, plain SQL, Markdown report, rule-based classifier |
 | API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, plus a small web page at `/` |
 | RAG | Chunking, embeddings (TF-IDF, bge-m3 via Ollama, or Vertex AI), cosine retrieval, sources, refusal, measured on labelled questions |
-| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 57 tests |
+| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 68 tests |
 
 > **All data is synthetic.** Tickets are generated with a fixed random seed. No real customer, employer or government data is used or stored.
 >
@@ -119,12 +119,22 @@ The page at `/` reads `GET /health` and shows only what the server really offers
 - The embedding model is not selectable per request, because switching it means building a different index.
 - Try it locally: `ollama serve`, then `RAG_EMBEDDER=ollama RAG_LLMS=ollama PYTHONPATH=src uvicorn ops_report.api:app`.
 
+### Adding another AI
+
+Answer writers are a small registry in `rag.py` (`LLM_PROVIDERS`). To add one (OpenAI, Anthropic API, another local runtime):
+
+1. Write a class with a `model` attribute, `__init__(self, model=None)` and `generate(self, prompt: str) -> str`.
+2. Add it to `LLM_PROVIDERS` (and a display name to `PROVIDER_LABELS`).
+3. List it in `RAG_LLMS`, for example `RAG_LLMS=ollama:*,myprovider:some-model`.
+
+The dropdown, the `method` check, the fallback to the original passage and the rate limit all work for it with no other change. A test registers a fake provider this way to prove it. Downloading another local model (`ollama pull <name>`) needs no code at all when `ollama:*` is used: restart the server and it appears in the dropdown.
+
 ### Choosing the embedder and the answer mode
 
 | Variable | Values | Effect |
 |---|---|---|
 | `RAG_EMBEDDER` | `tfidf` (default), `ollama`, `vertex` | How chunks and questions become vectors |
-| `RAG_LLMS` | empty (default), or a comma list of `ollama`, `vertex` | Extra ways to write the answer that this server offers. The original passage is always offered. `RAG_LLM` (single name) still works |
+| `RAG_LLMS` | empty (default), or a comma list of `provider` or `provider:model` | Extra ways to write the answer that this server offers. Examples: `ollama:*` (every model downloaded in the local Ollama, found at startup), `ollama:qwen2.5:7b,vertex:gemini-3.8-flash`. The original passage is always offered. `RAG_LLM` (single name) still works |
 | `RAG_LLM` | `none` (default), `vertex`, `ollama` | `none` returns the best passage; `vertex` (Gemini, cloud) or `ollama` (local Qwen) writes the answer from the retrieved passages, with `[1]` citations. `ollama` only works where Ollama runs, so not on Cloud Run |
 
 - **No keys in code.** On Cloud Run the service gets a short-lived token from the metadata server for its service account. Locally it uses `gcloud auth print-access-token`. The service account needs `roles/aiplatform.user`.

@@ -135,8 +135,7 @@ class VertexEmbedder:
 
     def _predict(self, texts: list[str], task: str) -> list[list[float]]:
         project = gcp.project_id()
-        url = (f"https://{self.location}-aiplatform.googleapis.com/v1/projects/{project}"
-               f"/locations/{self.location}/publishers/google/models/{self.model}:predict")
+        url = gcp.vertex_model_url(project, self.location, self.model, "predict")
         vectors: list[list[float]] = []
         for i in range(0, len(texts), 100):  # the API accepts a limited batch size
             batch = texts[i:i + 100]
@@ -229,8 +228,7 @@ class VertexGemini:
 
     def generate(self, prompt: str) -> str:
         project = gcp.project_id()
-        url = (f"https://{self.location}-aiplatform.googleapis.com/v1/projects/{project}"
-               f"/locations/{self.location}/publishers/google/models/{self.model}:generateContent")
+        url = gcp.vertex_model_url(project, self.location, self.model, "generateContent")
         body = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0, "maxOutputTokens": 512},
@@ -270,16 +268,42 @@ class OllamaLLM:
         return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
 
-def make_llm(name: str | None = None):
-    """None / 'none' = extractive answers only; 'vertex' = Gemini on Vertex AI; 'ollama' = local model."""
-    name = (name or "none").lower()
-    if name == "vertex":
-        return VertexGemini()
-    if name == "ollama":
-        return OllamaLLM()
-    if name == "none":
+# --- Answer-writing models -------------------------------------------------------------------
+# To add another AI (OpenAI, Anthropic API, another local runtime...):
+#   1. write a class with a `model` attribute, an `__init__(self, model=None)` and
+#      `generate(self, prompt: str) -> str`;
+#   2. add it to LLM_PROVIDERS below (and a display name to PROVIDER_LABELS);
+#   3. list it in RAG_LLMS, for example RAG_LLMS=ollama:*,myprovider:some-model.
+# The web page and API pick it up with no other change.
+LLM_PROVIDERS = {"ollama": OllamaLLM, "vertex": VertexGemini}
+PROVIDER_LABELS = {"ollama": "Local model", "vertex": "Cloud model"}
+
+
+def parse_llm_spec(spec: str) -> tuple[str, str | None]:
+    """'ollama' -> ('ollama', None); 'ollama:qwen2.5:7b' -> ('ollama', 'qwen2.5:7b')."""
+    provider, _, model = spec.strip().partition(":")
+    return provider.lower(), (model or None)
+
+
+def make_llm(spec: str | None = None):
+    """None / 'none' = extractive answers only; otherwise 'provider' or 'provider:model'."""
+    if not spec or spec.strip().lower() == "none":
         return None
-    raise ValueError(f"Unknown LLM {name!r}; use none, vertex or ollama")
+    provider, model = parse_llm_spec(spec)
+    cls = LLM_PROVIDERS.get(provider)
+    if cls is None:
+        raise ValueError(f"Unknown LLM provider {provider!r}; available: {', '.join(LLM_PROVIDERS)}")
+    return cls(model=model)
+
+
+def list_ollama_models(host: str = "http://localhost:11434", timeout: float = 3.0) -> list[str]:
+    """Models downloaded in the local Ollama, minus embedding models. Empty if Ollama is not running."""
+    try:
+        with urllib.request.urlopen(f"{host.rstrip('/')}/api/tags", timeout=timeout) as response:
+            names = [m["name"] for m in json.load(response).get("models", [])]
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+    return [n for n in names if not re.search(r"embed|bge|minilm|e5-", n, re.I)]
 
 
 def answer(question: str, retriever: Retriever, k: int = 3, llm=None) -> dict:

@@ -52,6 +52,16 @@ def access_token() -> str:
     return _cache["token"]
 
 
+def vertex_model_url(project: str, location: str, model: str, method: str) -> str:
+    """URL of a Google publisher model on Vertex AI.
+
+    The `global` location uses the bare host `aiplatform.googleapis.com`; every regional
+    location uses `<location>-aiplatform.googleapis.com`.
+    """
+    host = "aiplatform.googleapis.com" if location == "global" else f"{location}-aiplatform.googleapis.com"
+    return f"https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:{method}"
+
+
 def post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
     request = urllib.request.Request(
         url,

@@ -17,7 +17,8 @@ from . import db
 from .classify import classify
 from .data import generate_tickets
 from .ratelimit import RateLimiter, make_limit_dependency
-from .rag import Retriever, answer, make_embedder, make_llm
+from .rag import (PROVIDER_LABELS, Retriever, answer, list_ollama_models, make_embedder, make_llm,
+                  parse_llm_spec)
 from .report import build_report
 
 WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
@@ -76,12 +77,22 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
         logging.getLogger(__name__).warning("Embedder %r unavailable (%s); falling back to tfidf", embedder_name, exc)
         embedder_name, retriever = "tfidf", Retriever()
     # Answer methods this server offers. "passage" (the original best passage) is always there.
-    # RAG_LLMS = comma list of extra methods: ollama (local Qwen), vertex (Gemini). RAG_LLM is the old single name.
+    # RAG_LLMS = comma list of "provider" or "provider:model", for example
+    #   ollama:*                    every model downloaded in the local Ollama (found at startup)
+    #   ollama:qwen2.5:7b,vertex    one local model plus the cloud default
+    # RAG_LLM (a single name) still works. Unknown providers fail at startup, not on a visitor's request.
     methods: dict[str, tuple[object | None, str]] = {"passage": (None, "Original passage")}
-    for name in (os.environ.get("RAG_LLMS") or os.environ.get("RAG_LLM") or "").lower().replace(" ", "").split(","):
-        if name and name != "none" and name not in methods:
-            llm = make_llm(name)  # unknown names fail at startup, not on a visitor's request
-            methods[name] = (llm, f"{'Local' if name == 'ollama' else 'Cloud'} model: {llm.model}")
+    specs: list[str] = []
+    for spec in (os.environ.get("RAG_LLMS") or os.environ.get("RAG_LLM") or "").replace(" ", "").split(","):
+        if not spec or spec.lower() == "none":
+            continue
+        specs += [f"ollama:{m}" for m in list_ollama_models()] if spec.lower() == "ollama:*" else [spec]
+    for spec in specs:
+        if spec in methods:
+            continue
+        llm = make_llm(spec)
+        provider = parse_llm_spec(spec)[0]
+        methods[spec] = (llm, f"{PROVIDER_LABELS.get(provider, provider)}: {llm.model}")
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))
