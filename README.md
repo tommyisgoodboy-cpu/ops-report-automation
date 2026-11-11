@@ -239,6 +239,17 @@ gcloud run deploy ops-report --source . --region asia-east2 --allow-unauthentica
   --max-instances 1 --set-env-vars RATE_LIMIT_TRUST_PROXY=1
 ```
 
+### Container image cleanup
+
+Every `gcloud run deploy --source` pushes a new image to Artifact Registry, so versions pile up. `infra/artifact-registry-cleanup.json` keeps the 5 newest versions and deletes the rest once they are a day old (the live revision's image is always among the newest). Apply it first in dry-run mode, which only logs what would be deleted, then switch it on:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy --location asia-east2 --policy=infra/artifact-registry-cleanup.json --dry-run
+gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy --location asia-east2 --policy=infra/artifact-registry-cleanup.json --no-dry-run
+```
+
+Rolling back further than 5 versions is then not possible. Measured size after 15 deploys in one day: 136 MB (layers are shared), inside the free storage allowance, so this is housekeeping rather than a cost fix.
+
 ### More security notes
 
 - **Response headers**: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` on every response, plus a Content-Security-Policy on the demo page that blocks framing and any connection except to itself. The policy still allows inline script and style (the page is one file), so it limits damage rather than preventing XSS; the real XSS defence is that answers are inserted with `textContent`, never as HTML.
