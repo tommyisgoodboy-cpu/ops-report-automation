@@ -5,26 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IT Support Assistant</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e2e5ea; --accent:#2f5fd0; --warn:#b54708; }
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e2e5ea; --accent:#2f5fd0; --warn:#b54708; --ok:#067647; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#14171c; --card:#1d2128; --text:#e8ebf0; --muted:#9aa4b2; --line:#2c323c; --accent:#7aa2ff; --warn:#f0a35e; }
+    :root { --bg:#14171c; --card:#1d2128; --text:#e8ebf0; --muted:#9aa4b2; --line:#2c323c; --accent:#7aa2ff; --warn:#f0a35e; --ok:#5fd39a; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  main { max-width:680px; margin:0 auto; padding:32px 16px 64px; }
+  main { max-width:760px; margin:0 auto; padding:32px 16px 64px; }
   h1 { font-size:1.4rem; margin:0 0 4px; }
   .sub { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
   form { display:flex; gap:8px; }
-  input { flex:1; min-width:0; padding:12px 14px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
-  input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  input[type="text"], select { padding:12px 14px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  input[type="text"] { flex:1; min-width:0; }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   button { padding:12px 18px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
   button:disabled { opacity:.6; cursor:wait; }
+  .controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin-top:12px; font-size:.92rem; color:var(--muted); }
+  .controls label { display:flex; align-items:center; gap:8px; }
+  .controls select { padding:6px 10px; font-size:.92rem; }
   .card { margin-top:20px; padding:16px 18px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
   .card h2 { font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
   .card h2:not(:first-child) { margin-top:16px; }
-  #answer { margin:0; white-space:pre-wrap; }
-  #sources { margin:0; padding-left:18px; color:var(--muted); font-size:.92rem; }
+  .head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
+  .head h2 { margin:0 !important; }
+  .badge { font-size:.78rem; padding:2px 10px; border:1px solid var(--line); border-radius:999px; color:var(--muted); }
+  .badge.ai { color:var(--ok); border-color:var(--ok); }
+  .badge.warn { color:var(--warn); border-color:var(--warn); }
+  .text { margin:6px 0 0; white-space:pre-wrap; }
   .none { color:var(--warn); }
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+  .pane { padding:12px 14px; border:1px solid var(--line); border-radius:10px; }
+  .pane h3 { margin:0 0 4px; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .pane p { margin:0; white-space:pre-wrap; }
+  @media (max-width:560px) { .compare { grid-template-columns:1fr; } form { flex-wrap:wrap; } button { width:100%; } }
+  #sources { margin:0; padding-left:18px; color:var(--muted); font-size:.92rem; }
   .hint { margin-top:24px; color:var(--muted); font-size:.85rem; }
   [hidden] { display:none !important; }
 </style>
@@ -35,14 +49,31 @@
   <p class="sub">Ask a troubleshooting question. Answers come from a small knowledge base and always show their sources.</p>
 
   <form id="form">
-    <input id="q" name="q" maxlength="300" required autocomplete="off"
+    <input id="q" type="text" name="q" maxlength="300" required autocomplete="off"
            placeholder="e.g. VPN keeps dropping" aria-label="Your question">
     <button id="go" type="submit">Ask</button>
   </form>
 
+  <div id="controls" class="controls" hidden>
+    <label>Answer by
+      <select id="method" aria-label="How the answer is written"></select>
+    </label>
+    <label><input id="compare" type="checkbox"> Compare with the original passage</label>
+  </div>
+
   <section id="result" class="card" hidden aria-live="polite">
-    <h2>Answer</h2>
-    <p id="answer"></p>
+    <div class="head">
+      <h2 id="title">Answer</h2>
+      <span id="badge" class="badge"></span>
+    </div>
+
+    <p id="answer" class="text"></p>
+
+    <div id="cmp" class="compare" hidden>
+      <div class="pane"><h3>Original passage</h3><p id="cmpPassage"></p></div>
+      <div class="pane"><h3 id="cmpTitle">AI answer</h3><p id="cmpAnswer"></p></div>
+    </div>
+
     <h2 id="srcTitle">Sources</h2>
     <ul id="sources"></ul>
   </section>
@@ -51,56 +82,98 @@
 </main>
 
 <script>
-const form = document.getElementById("form");
-const input = document.getElementById("q");
-const button = document.getElementById("go");
-const result = document.getElementById("result");
-const answer = document.getElementById("answer");
-const sources = document.getElementById("sources");
-const srcTitle = document.getElementById("srcTitle");
-const hint = document.getElementById("hint");
+const $ = (id) => document.getElementById(id);
+const form = $("form"), input = $("q"), button = $("go");
+const controls = $("controls"), methodSel = $("method"), compareBox = $("compare");
+const result = $("result"), answer = $("answer"), badge = $("badge");
+const cmp = $("cmp"), cmpPassage = $("cmpPassage"), cmpAnswer = $("cmpAnswer"), cmpTitle = $("cmpTitle");
+const sources = $("sources"), srcTitle = $("srcTitle"), hint = $("hint");
+const labels = {};   // method id -> label, filled from /health
 
-// Say which retrieval method is really running (read from /health), instead of hard-coding it.
+// Ask the server what it really offers. Options the server lacks are never shown.
 fetch("/health").then((r) => r.json()).then((h) => {
   const how = h.embedder === "tfidf"
     ? "Retrieval is TF-IDF, so it matches words rather than meaning."
     : "Retrieval uses neural embeddings (" + h.embedder + "), so it matches meaning, including Cantonese.";
-  hint.textContent = "Demo with synthetic data. " + how + " Answers are the best matching passage, with sources. See the README.";
+  hint.textContent = "Demo with synthetic data. " + how + " See the README.";
+  const list = h.answer_methods || [];
+  list.forEach((m) => {
+    labels[m.id] = m.label;
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.label;
+    methodSel.appendChild(opt);
+  });
+  controls.hidden = list.length < 2;   // only "original passage": nothing to choose or compare
 }).catch(() => {});
+
+function setBadge(text, kind) {
+  badge.textContent = text;
+  badge.className = "badge" + (kind ? " " + kind : "");
+  badge.hidden = !text;
+}
+
+function render(data, method, wantCompare) {
+  const noMatch = data.sources.length === 0;
+  const generated = data.mode === "generated";
+  const asked = method !== "passage";
+
+  if (generated) setBadge("AI generated · " + labels[method], "ai");
+  else if (asked && !noMatch) setBadge("AI unavailable, showing the original passage", "warn");
+  else if (noMatch) setBadge("No match", "");
+  else setBadge("Original passage", "");
+
+  const showCompare = wantCompare && asked && generated;
+  cmp.hidden = !showCompare;
+  answer.hidden = showCompare;
+  // textContent shows the text literally, so it is never parsed or run as HTML.
+  answer.textContent = data.answer;
+  answer.classList.toggle("none", noMatch);
+  if (showCompare) {
+    cmpPassage.textContent = data.passage;
+    cmpTitle.textContent = "AI answer (" + labels[method] + ")";
+    cmpAnswer.textContent = data.answer;
+  }
+
+  sources.replaceChildren(...data.sources.map((s) => {
+    const li = document.createElement("li");
+    li.textContent = `${s.doc} — ${s.heading} (score ${s.score})`;
+    return li;
+  }));
+  srcTitle.hidden = noMatch;
+  result.hidden = false;
+}
+
+function showError(message) {
+  setBadge("", "");
+  cmp.hidden = true;
+  answer.hidden = false;
+  answer.textContent = message;
+  answer.classList.add("none");
+  sources.replaceChildren();
+  srcTitle.hidden = true;
+  result.hidden = false;
+}
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();            // stop the browser reloading the page
+  const method = methodSel.value || "passage";
   button.disabled = true;
-  button.textContent = "Searching…";
+  button.textContent = method === "passage" ? "Searching…" : "Thinking…";
   try {
     const res = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: input.value.trim() }),
+      body: JSON.stringify({ question: input.value.trim(), method }),
     });
     if (res.status === 429) {
       const wait = res.headers.get("Retry-After");
       throw new Error("Too many requests. Please wait " + (wait || "a few") + " seconds and try again.");
     }
     if (!res.ok) throw new Error("Server returned " + res.status);
-    const data = await res.json();
-
-    // textContent shows the text literally, so it is never parsed or run as HTML.
-    answer.textContent = data.answer;
-    answer.classList.toggle("none", data.sources.length === 0);
-    sources.replaceChildren(...data.sources.map((s) => {
-      const li = document.createElement("li");
-      li.textContent = `${s.doc} — ${s.heading} (score ${s.score})`;
-      return li;
-    }));
-    srcTitle.hidden = data.sources.length === 0;
-    result.hidden = false;
+    render(await res.json(), method, compareBox.checked);
   } catch (err) {
-    answer.textContent = "Something went wrong: " + err.message;
-    answer.classList.add("none");
-    sources.replaceChildren();
-    srcTitle.hidden = true;
-    result.hidden = false;
+    showError(err.message.startsWith("Too many") ? err.message : "Something went wrong: " + err.message);
   } finally {
     button.disabled = false;
     button.textContent = "Ask";

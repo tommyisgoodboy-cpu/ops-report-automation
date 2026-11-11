@@ -9,7 +9,7 @@ Turns raw IT-support tickets into a daily operations report (volume by category,
 | Data and report | Synthetic tickets, SQLite, plain SQL, Markdown report, rule-based classifier |
 | API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, plus a small web page at `/` |
 | RAG | Chunking, embeddings (TF-IDF, bge-m3 via Ollama, or Vertex AI), cosine retrieval, sources, refusal, measured on labelled questions |
-| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 36 tests |
+| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 57 tests |
 
 > **All data is synthetic.** Tickets are generated with a fixed random seed. No real customer, employer or government data is used or stored.
 >
@@ -111,11 +111,20 @@ Caveats, stated plainly:
 - **A score threshold alone cannot separate chit-chat from real questions.** With Vertex, "hi" scored 0.54 and "help" 0.60, while the weakest correct match was 0.60. I checked whether the gap between the top and third result would help: it does not, because some real questions have a gap as small as 0.02. What I did instead: questions shorter than 5 characters get "please describe the problem" without searching, and the Vertex threshold went from 0.52 to 0.57. Longer vague messages (for example "help me please") can still return a weak match. A proper fix needs an intent check or an LLM judging whether the passage answers the question.
 - bge-m3 still misses one question ("I can't sign in to my PC" returns the VPN article; the right one is in its top 3).
 
+### Web page: choosing how the answer is written
+
+The page at `/` reads `GET /health` and shows only what the server really offers. With nothing configured (the Cloud Run demo) there is just the original passage and the picker is hidden. Locally, `RAG_LLMS=ollama` adds "Local model: qwen2.5:7b" to a dropdown and a **Compare with the original passage** checkbox that shows the two answers side by side. A badge says how the answer was produced: `AI generated`, `Original passage`, `No match`, or a warning when the AI model failed and the original passage was shown instead.
+
+- The picker is not trusted: `POST /ask` takes a `method` and rejects anything not on the server's own list (HTTP 400), so a visitor cannot choose a model the operator did not configure. Choosing a paid model still counts against the rate limit.
+- The embedding model is not selectable per request, because switching it means building a different index.
+- Try it locally: `ollama serve`, then `RAG_EMBEDDER=ollama RAG_LLMS=ollama PYTHONPATH=src uvicorn ops_report.api:app`.
+
 ### Choosing the embedder and the answer mode
 
 | Variable | Values | Effect |
 |---|---|---|
 | `RAG_EMBEDDER` | `tfidf` (default), `ollama`, `vertex` | How chunks and questions become vectors |
+| `RAG_LLMS` | empty (default), or a comma list of `ollama`, `vertex` | Extra ways to write the answer that this server offers. The original passage is always offered. `RAG_LLM` (single name) still works |
 | `RAG_LLM` | `none` (default), `vertex`, `ollama` | `none` returns the best passage; `vertex` (Gemini, cloud) or `ollama` (local Qwen) writes the answer from the retrieved passages, with `[1]` citations. `ollama` only works where Ollama runs, so not on Cloud Run |
 
 - **No keys in code.** On Cloud Run the service gets a short-lived token from the metadata server for its service account. Locally it uses `gcloud auth print-access-token`. The service account needs `roles/aiplatform.user`.

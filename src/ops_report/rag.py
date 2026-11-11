@@ -287,15 +287,16 @@ def answer(question: str, retriever: Retriever, k: int = 3, llm=None) -> dict:
 
     No relevant chunk: say so and do not call the LLM. With an `llm`: generate an answer
     from the retrieved context. If the LLM fails, fall back to the best chunk's text, so the
-    service keeps working. `mode` says which path produced the answer.
+    service keeps working. `mode` says which path produced the answer; `passage` is always the original best passage,
+    so a caller can show it next to the generated answer.
     """
     if too_short(question):
-        return {"question": question, "mode": "extractive", "sources": [],
-                "answer": "Please describe the problem in a few words, for example: VPN keeps disconnecting."}
+        message = "Please describe the problem in a few words, for example: VPN keeps disconnecting."
+        return {"question": question, "mode": "extractive", "sources": [], "answer": message, "passage": message}
     hits = retriever.search(question, k=k)
     if not hits:
-        return {"question": question, "answer": "I do not know. No relevant article found.",
-                "sources": [], "mode": "extractive"}
+        message = "I do not know. No relevant article found."
+        return {"question": question, "answer": message, "passage": message, "sources": [], "mode": "extractive"}
     sources = [{"doc": c.doc, "heading": c.heading, "score": round(s, 3)} for c, s in hits]
     best = hits[0][0]
     extractive = f"{best.heading}: {best.text}"
@@ -303,7 +304,9 @@ def answer(question: str, retriever: Retriever, k: int = 3, llm=None) -> dict:
         try:
             text = llm.generate(build_prompt(question, hits))
             if text:
-                return {"question": question, "answer": text, "sources": sources, "mode": "generated"}
+                return {"question": question, "answer": text, "passage": extractive,
+                        "sources": sources, "mode": "generated"}
         except Exception as exc:  # noqa: BLE001 - any LLM failure degrades to the extractive answer
             logging.getLogger(__name__).warning("LLM generation failed, using extractive answer: %s", exc)
-    return {"question": question, "answer": extractive, "sources": sources, "mode": "extractive"}
+    return {"question": question, "answer": extractive, "passage": extractive,
+            "sources": sources, "mode": "extractive"}

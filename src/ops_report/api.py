@@ -38,6 +38,8 @@ class ClassifyOut(BaseModel):
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=300)
     k: int = Field(3, ge=1, le=5)
+    # Which way to write the answer. Checked against the server's own allow-list, never trusted.
+    method: str = Field("passage", min_length=1, max_length=20)
 
 
 class Source(BaseModel):
@@ -49,6 +51,7 @@ class Source(BaseModel):
 class AskOut(BaseModel):
     question: str
     answer: str
+    passage: str  # the original best passage, so a client can show it next to a generated answer
     sources: list[Source]
     mode: Literal["extractive", "generated"]
 
@@ -72,8 +75,13 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     except Exception as exc:  # noqa: BLE001 - an external dependency must not stop the service booting
         logging.getLogger(__name__).warning("Embedder %r unavailable (%s); falling back to tfidf", embedder_name, exc)
         embedder_name, retriever = "tfidf", Retriever()
-    # RAG_LLM = none (default, returns the best passage) | vertex (Gemini writes the answer from the passages)
-    llm = make_llm(os.environ.get("RAG_LLM"))
+    # Answer methods this server offers. "passage" (the original best passage) is always there.
+    # RAG_LLMS = comma list of extra methods: ollama (local Qwen), vertex (Gemini). RAG_LLM is the old single name.
+    methods: dict[str, tuple[object | None, str]] = {"passage": (None, "Original passage")}
+    for name in (os.environ.get("RAG_LLMS") or os.environ.get("RAG_LLM") or "").lower().replace(" ", "").split(","):
+        if name and name != "none" and name not in methods:
+            llm = make_llm(name)  # unknown names fail at startup, not on a visitor's request
+            methods[name] = (llm, f"{'Local' if name == 'ollama' else 'Cloud'} model: {llm.model}")
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))
@@ -84,7 +92,11 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "embedder": embedder_name}
+        return {
+            "status": "ok",
+            "embedder": embedder_name,
+            "answer_methods": [{"id": k, "label": label} for k, (_, label) in methods.items()],
+        }
 
     @app.get("/report", response_class=PlainTextResponse, dependencies=[limited])
     def report() -> str:
@@ -114,8 +126,10 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
 
     @app.post("/ask", response_model=AskOut, dependencies=[limited])
     def ask(body: AskIn) -> dict:
+        if body.method not in methods:
+            raise HTTPException(status_code=400, detail=f"Unknown answer method. Use one of: {', '.join(methods)}")
         try:
-            return answer(body.question, retriever, k=body.k, llm=llm)
+            return answer(body.question, retriever, k=body.k, llm=methods[body.method][0])
         except RuntimeError as exc:  # e.g. the embedding service is unreachable
             logging.getLogger(__name__).error("ask failed: %s", exc)
             raise HTTPException(status_code=503, detail="Retrieval service temporarily unavailable") from exc

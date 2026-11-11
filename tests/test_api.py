@@ -23,11 +23,15 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="form"', r.text)
         self.assertIn("/ask", r.text)
         self.assertNotIn("innerHTML", r.text)  # answers must be shown as text, not HTML
+        for element in ('id="method"', 'id="compare"', 'id="badge"', 'id="cmpPassage"'):
+            self.assertIn(element, r.text)  # model picker, side-by-side comparison and mode label
 
     def test_health(self):
         r = self.client.get("/health")
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json(), {"status": "ok", "embedder": "tfidf"})
+        body = r.json()
+        self.assertEqual((body["status"], body["embedder"]), ("ok", "tfidf"))
+        self.assertEqual([m["id"] for m in body["answer_methods"]], ["passage"])
 
     def test_report_is_markdown_with_ticket_count(self):
         r = self.client.get("/report")
@@ -92,6 +96,42 @@ class ApiTests(unittest.TestCase):
         with mock.patch("ops_report.api.answer", side_effect=RuntimeError("down")):
             r = self.client.post("/ask", json={"question": "printer offline"})
         self.assertEqual(r.status_code, 503)
+
+    def test_ask_always_returns_the_original_passage(self):
+        body = self.client.post("/ask", json={"question": "printer says offline"}).json()
+        self.assertIn("Printer shows offline", body["passage"])
+
+    def test_unknown_answer_method_is_rejected(self):
+        for method in ("vertex", "gpt-4", "../etc"):
+            r = self.client.post("/ask", json={"question": "printer offline", "method": method})
+            self.assertEqual(r.status_code, 400, method)
+
+    def test_configured_llm_is_listed_and_selectable_and_passage_stays_the_default(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"RAG_LLMS": "ollama"}), \
+             mock.patch("ops_report.rag.OllamaLLM.generate", return_value="Restart the spooler [1]."):
+            client = TestClient(create_app(n_tickets=10))
+            ids = [m["id"] for m in client.get("/health").json()["answer_methods"]]
+            self.assertEqual(ids, ["passage", "ollama"])
+            default = client.post("/ask", json={"question": "printer offline"}).json()
+            chosen = client.post("/ask", json={"question": "printer offline", "method": "ollama"}).json()
+        self.assertEqual(default["mode"], "extractive")  # nothing paid or slow unless asked for
+        self.assertEqual(chosen["mode"], "generated")
+        self.assertEqual(chosen["answer"], "Restart the spooler [1].")
+        self.assertIn("Printer shows offline", chosen["passage"])  # original kept for side-by-side
+
+    def test_llm_failure_still_returns_passage_with_extractive_mode(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"RAG_LLMS": "ollama"}), \
+             mock.patch("ops_report.rag.OllamaLLM.generate", side_effect=RuntimeError("down")):
+            client = TestClient(create_app(n_tickets=10))
+            body = client.post("/ask", json={"question": "printer offline", "method": "ollama"}).json()
+        self.assertEqual(body["mode"], "extractive")
+        self.assertIn("Printer shows offline", body["answer"])
 
 
 if __name__ == "__main__":
