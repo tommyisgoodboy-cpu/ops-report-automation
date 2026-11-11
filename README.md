@@ -39,12 +39,18 @@ PYTHONPATH=src uvicorn ops_report.api:app --reload
 
 The API serves its own in-memory set of synthetic tickets (seeded, reproducible).
 
-Run in Docker (CLI report, no extra dependencies):
+Run in Docker (serves the HTTP API on port 8080):
 
 ```bash
 docker build -t ops-report .
-docker run --rm ops-report
+docker run --rm -p 8080:8080 ops-report
+curl localhost:8080/health
+
+# CLI report instead of the API:
+docker run --rm ops-report python -m ops_report --db /tmp/tickets.db --out /tmp/report.md
 ```
+
+The image runs as a non-root user and reads `$PORT` (default 8080), so it runs unchanged on Google Cloud Run.
 
 ## What the report contains
 
@@ -53,6 +59,20 @@ docker run --rm ops-report
 - Per priority (P1-P4): ticket count, MTTR, SLA breach rate
 - Top repeating issues
 - Baseline classifier accuracy against the recorded category
+
+## Deploy to Google Cloud Run
+
+Data is synthetic, so a public demo is safe. Cost is capped by scaling to zero and limiting instances.
+
+```bash
+gcloud run deploy ops-report \
+  --source . \
+  --region asia-east2 \
+  --allow-unauthenticated \
+  --max-instances 1
+```
+
+Set a budget alert on the billing account first.
 
 ## Design notes
 
@@ -74,4 +94,6 @@ docker run --rm ops-report
 - [ ] LLM-based classifier compared with the baseline on the same labels
 - [ ] Treat overdue open tickets as SLA breaches
 - [ ] HTML report and a scheduled daily run
-- [ ] Deploy to a cloud function and publish the report
+- [x] Dockerfile serves the API (tested locally)
+- [ ] Deploy to Cloud Run and publish the URL
+- [ ] Deploy automatically from CI
