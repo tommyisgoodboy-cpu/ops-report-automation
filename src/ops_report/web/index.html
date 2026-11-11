@@ -47,7 +47,7 @@
     <ul id="sources"></ul>
   </section>
 
-  <p class="hint">Demo with synthetic data. Retrieval is TF-IDF, so it matches words rather than meaning. See the README.</p>
+  <p class="hint" id="hint">Demo with synthetic data. Answers are the best matching passage from the knowledge base, with sources. See the README.</p>
 </main>
 
 <script>
@@ -58,6 +58,15 @@ const result = document.getElementById("result");
 const answer = document.getElementById("answer");
 const sources = document.getElementById("sources");
 const srcTitle = document.getElementById("srcTitle");
+const hint = document.getElementById("hint");
+
+// Say which retrieval method is really running (read from /health), instead of hard-coding it.
+fetch("/health").then((r) => r.json()).then((h) => {
+  const how = h.embedder === "tfidf"
+    ? "Retrieval is TF-IDF, so it matches words rather than meaning."
+    : "Retrieval uses neural embeddings (" + h.embedder + "), so it matches meaning, including Cantonese.";
+  hint.textContent = "Demo with synthetic data. " + how + " Answers are the best matching passage, with sources. See the README.";
+}).catch(() => {});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();            // stop the browser reloading the page
