@@ -121,7 +121,7 @@ Caveats, stated plainly:
 - **The service keeps working if a dependency fails.** If the chosen embedder cannot start, it falls back to TF-IDF and `/health` reports which embedder is active. If the LLM call fails, the answer falls back to the best passage (`"mode": "extractive"`). A retrieval failure during a question returns 503.
 - When nothing relevant is retrieved, the LLM is not called at all and the answer is "I do not know".
 - Local Python from python.org may lack root certificates; point `SSL_CERT_FILE` at `certifi.where()` if HTTPS calls fail with `CERTIFICATE_VERIFY_FAILED`.
-- **Status of LLM generation:** the code path is tested with a fake LLM. I could not verify it against a real Gemini model: on my new Google Cloud project every Gemini model name returned 404 ("not found or no access"), while the embedding model on the same API worked. Likely an access or terms setting on the project, not a code problem, but I have not confirmed that.
+- **Status of LLM generation:** the code path is tested with a fake LLM, and the service degrades to extractive answers if the call fails. I could not verify it against a real Gemini model. On my Google Cloud project every `generateContent` call returned 404 ("not found or your project does not have access") while the embedding model on the same API worked. I tried regional and global endpoints, four Gemini model names (the model metadata lists them as GA), a quota-project header, the `@default` suffix, `v1` and `v1beta1`, and enabling the extra APIs the console asked for. My best guess is an account-level restriction (billing state or organisation policy), not a code problem, but I have not confirmed it.
 
 ## Deploy to Google Cloud Run
 
