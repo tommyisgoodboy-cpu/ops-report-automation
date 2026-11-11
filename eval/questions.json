@@ -100,6 +100,21 @@
     "expect": "Monitor flickers or has no signal"
   },
   {
+    "type": "paraphrase",
+    "q": "cannot login to wifi",
+    "expect": "Cannot sign in to Wi-Fi"
+  },
+  {
+    "type": "paraphrase",
+    "q": "my laptop cannot find the company wireless network",
+    "expect": "Cannot connect to Wi-Fi"
+  },
+  {
+    "type": "cantonese",
+    "q": "連唔到 Wi-Fi",
+    "expect": "Cannot connect to Wi-Fi"
+  },
+  {
     "type": "out_of_scope",
     "q": "how to bake bread",
     "expect": null

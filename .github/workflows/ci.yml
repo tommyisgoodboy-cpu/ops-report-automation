@@ -21,6 +21,14 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: RAG retrieval evaluation report (TF-IDF baseline; the floors are enforced by the unit tests)
         run: PYTHONPATH=src python -m ops_report.rag_eval | tee rag-eval.txt
+      - name: Docker image builds and serves requests
+        run: |
+          docker build -t ops-report .
+          docker run -d --name ops-report -p 8080:8080 ops-report
+          for i in $(seq 1 30); do curl -fs localhost:8080/health >/dev/null && break; sleep 1; done
+          curl -fs localhost:8080/health
+          curl -fs -X POST localhost:8080/ask -H 'content-type: application/json' -d '{"question":"printer shows offline"}' | grep -q 'printer.md'
+          docker logs ops-report | tail -5
       - name: Generate sample report
         run: PYTHONPATH=src python -m ops_report --db /tmp/tickets.db --out report.md
       - uses: actions/upload-artifact@v7
