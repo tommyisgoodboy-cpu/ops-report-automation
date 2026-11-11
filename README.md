@@ -139,6 +139,29 @@ gcloud run deploy ops-report \
 
 Set a budget alert on the billing account first.
 
+## Security notes
+
+The demo is public and uses synthetic data only. Defences in place:
+
+| Risk | Defence |
+|---|---|
+| Hammering the API (and, with a paid model, the bill) | Per-client rate limit: `RATE_LIMIT_PER_MINUTE` (default 30, `0` disables). Over the limit returns `429` with `Retry-After`. Applies to `/ask`, `/classify`, `/tickets`, `/report`; not to `/health` or the page |
+| Forged `X-Forwarded-For` to dodge the limit | Ignored unless `RATE_LIMIT_TRUST_PROXY=1`; then only the last entry (written by the proxy) is used |
+| Memory exhaustion by many fake clients | At most 10,000 tracked clients |
+| SQL injection | Filters are bound parameters (tested) |
+| XSS | Answers are rendered with `textContent` (tested) |
+| Oversized or malformed input | Length and range validation, `422` on violation |
+| Cost | `--max-instances 1`, billing budget alert |
+
+Known limits: the counter lives in one process, so with N instances the real limit is N times higher; use a gateway (Cloud Armor / API Gateway) or a shared store for a global limit. There is no authentication; for private use deploy with `--no-allow-unauthenticated`.
+
+On Cloud Run set `RATE_LIMIT_TRUST_PROXY=1`, otherwise every visitor shares the load balancer's address and therefore one budget:
+
+```bash
+gcloud run deploy ops-report --source . --region asia-east2 --allow-unauthenticated \
+  --max-instances 1 --set-env-vars RATE_LIMIT_TRUST_PROXY=1
+```
+
 ## Design notes
 
 - `data.py` generates reproducible synthetic tickets (same seed, same data).

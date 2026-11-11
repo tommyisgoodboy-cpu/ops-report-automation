@@ -69,6 +69,10 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: input.value.trim() }),
     });
+    if (res.status === 429) {
+      const wait = res.headers.get("Retry-After");
+      throw new Error("Too many requests. Please wait " + (wait || "a few") + " seconds and try again.");
+    }
     if (!res.ok) throw new Error("Server returned " + res.status);
     const data = await res.json();
 

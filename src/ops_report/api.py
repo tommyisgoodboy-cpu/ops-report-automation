@@ -9,13 +9,14 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import db
 from .classify import classify
 from .data import generate_tickets
+from .ratelimit import RateLimiter, make_limit_dependency
 from .rag import Retriever, answer, make_embedder, make_llm
 from .report import build_report
 
@@ -52,9 +53,17 @@ class AskOut(BaseModel):
     mode: Literal["extractive", "generated"]
 
 
-def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
-    """Build an app with its own in-memory DB of synthetic tickets."""
+def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = None) -> FastAPI:
+    """Build an app with its own in-memory DB of synthetic tickets.
+
+    rate_limit: max requests per client per minute on the data endpoints.
+    None reads RATE_LIMIT_PER_MINUTE (default 30); 0 disables the limit.
+    """
     app = FastAPI(title="ops-report-automation", version="0.2.0")
+    if rate_limit is None:
+        rate_limit = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "30"))
+    trust_proxy = os.environ.get("RATE_LIMIT_TRUST_PROXY") == "1"
+    limited = Depends(make_limit_dependency(RateLimiter(rate_limit) if rate_limit > 0 else None, trust_proxy))
     # Chunk and embed the knowledge base once at startup, not on every question.
     # RAG_EMBEDDER = tfidf (default) | ollama (local) | vertex (Google Cloud, no key needed on Cloud Run)
     embedder_name = (os.environ.get("RAG_EMBEDDER") or "tfidf").lower()
@@ -77,11 +86,11 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "embedder": embedder_name}
 
-    @app.get("/report", response_class=PlainTextResponse)
+    @app.get("/report", response_class=PlainTextResponse, dependencies=[limited])
     def report() -> str:
         return build_report(conn)
 
-    @app.get("/tickets")
+    @app.get("/tickets", dependencies=[limited])
     def tickets(
         category: str | None = None,
         priority: Priority | None = None,
@@ -99,11 +108,11 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
         params.append(limit)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
-    @app.post("/classify", response_model=ClassifyOut)
+    @app.post("/classify", response_model=ClassifyOut, dependencies=[limited])
     def classify_ticket(body: ClassifyIn) -> ClassifyOut:
         return ClassifyOut(summary=body.summary, category=classify(body.summary))
 
-    @app.post("/ask", response_model=AskOut)
+    @app.post("/ask", response_model=AskOut, dependencies=[limited])
     def ask(body: AskIn) -> dict:
         try:
             return answer(body.question, retriever, k=body.k, llm=llm)
