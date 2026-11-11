@@ -224,7 +224,10 @@ class VertexGemini:
 
     def __init__(self, model: str | None = None, location: str | None = None):
         self.model = model or os.environ.get("VERTEX_LLM_MODEL", "gemini-2.5-flash")
-        self.location = location or os.environ.get("VERTEX_LOCATION", "us-central1")
+        # Newer Gemini models are served from the `global` location, while the embedding model is
+        # regional, so the two have separate settings: VERTEX_LLM_LOCATION falls back to VERTEX_LOCATION.
+        self.location = (location or os.environ.get("VERTEX_LLM_LOCATION")
+                         or os.environ.get("VERTEX_LOCATION", "us-central1"))
 
     def generate(self, prompt: str) -> str:
         project = gcp.project_id()

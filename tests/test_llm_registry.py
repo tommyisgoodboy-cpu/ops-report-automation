@@ -54,6 +54,18 @@ class SpecTests(unittest.TestCase):
         self.assertEqual(rag.list_ollama_models(host="http://127.0.0.1:1", timeout=1), [])
 
 
+class VertexLocationTests(unittest.TestCase):
+    def test_llm_location_can_differ_from_the_embedding_location(self):
+        with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "us-central1", "VERTEX_LLM_LOCATION": "global"}):
+            self.assertEqual(rag.VertexGemini().location, "global")
+            self.assertEqual(rag.VertexEmbedder().location, "us-central1")
+
+    def test_llm_location_falls_back_to_the_shared_setting(self):
+        with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "asia-southeast1"}, clear=False):
+            os.environ.pop("VERTEX_LLM_LOCATION", None)
+            self.assertEqual(rag.VertexGemini().location, "asia-southeast1")
+
+
 class VertexUrlTests(unittest.TestCase):
     def test_global_location_uses_the_bare_host(self):
         url = gcp.vertex_model_url("proj", "global", "gemini-x", "generateContent")
