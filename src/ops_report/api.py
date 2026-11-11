@@ -40,7 +40,7 @@ class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=300)
     k: int = Field(3, ge=1, le=5)
     # Which way to write the answer. Checked against the server's own allow-list, never trusted.
-    method: str = Field("passage", min_length=1, max_length=20)
+    method: str = Field("passage", min_length=1, max_length=80)
 
 
 class Source(BaseModel):

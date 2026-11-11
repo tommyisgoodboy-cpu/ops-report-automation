@@ -121,6 +121,21 @@ class ApiRegistryTests(unittest.TestCase):
             ids = [m["id"] for m in client.get("/health").json()["answer_methods"]]
         self.assertEqual(ids, ["passage", "ollama:qwen2.5:7b", "ollama:llama3.1:8b"])
 
+    def test_long_real_world_model_ids_are_accepted_by_the_request_validation(self):
+        class Fake:
+            def __init__(self, model=None):
+                self.model = model
+
+            def generate(self, prompt):
+                return "ok [1]"
+
+        long_id = "vertex:gemini-3.8-flash"  # 23 characters: an earlier limit of 20 rejected it with HTTP 422
+        with mock.patch.dict(os.environ, {"RAG_LLMS": long_id}), mock.patch.dict(rag.LLM_PROVIDERS, {"vertex": Fake}):
+            client = TestClient(create_app(n_tickets=10))
+            r = client.post("/ask", json={"question": "printer offline", "method": long_id})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["mode"], "generated")
+
     def test_unknown_provider_fails_at_startup(self):
         with mock.patch.dict(os.environ, {"RAG_LLMS": "nope"}):
             with self.assertRaises(ValueError):
