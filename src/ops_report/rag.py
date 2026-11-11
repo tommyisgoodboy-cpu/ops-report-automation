@@ -7,11 +7,13 @@ without changing the retrieval or API code.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import math
 import os
 import re
+import threading
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -271,6 +273,33 @@ class OllamaLLM:
         return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
 
+class CappedLLM:
+    """Wraps a paid model and refuses once `limit` answers have been generated today (UTC).
+
+    The count lives in memory, so it resets when the service restarts: this is an extra layer,
+    not a billing guarantee. `answer()` treats the refusal like any LLM failure and falls back to
+    the original passage.
+    """
+
+    def __init__(self, inner, limit: int, today=lambda: datetime.datetime.now(datetime.timezone.utc).date()):
+        self.inner, self.limit, self._today = inner, limit, today
+        self._day, self._count, self._lock = None, 0, threading.Lock()
+
+    @property
+    def model(self):
+        return self.inner.model
+
+    def generate(self, prompt: str) -> str:
+        with self._lock:
+            day = self._today()
+            if day != self._day:
+                self._day, self._count = day, 0
+            if self._count >= self.limit:
+                raise RuntimeError(f"Daily limit of {self.limit} AI answers reached")
+            self._count += 1
+        return self.inner.generate(prompt)
+
+
 # --- Answer-writing models -------------------------------------------------------------------
 # To add another AI (OpenAI, Anthropic API, another local runtime...):
 #   1. write a class with a `model` attribute, an `__init__(self, model=None)` and
@@ -280,6 +309,7 @@ class OllamaLLM:
 # The web page and API pick it up with no other change.
 LLM_PROVIDERS = {"ollama": OllamaLLM, "vertex": VertexGemini}
 PROVIDER_LABELS = {"ollama": "Local model", "vertex": "Cloud model"}
+PAID_PROVIDERS = {"vertex"}  # these get a daily cap in the API (LLM_DAILY_LIMIT)
 
 
 def parse_llm_spec(spec: str) -> tuple[str, str | None]:

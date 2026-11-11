@@ -17,7 +17,7 @@ from . import db
 from .classify import classify
 from .data import generate_tickets
 from .ratelimit import RateLimiter, make_limit_dependency
-from .rag import (PROVIDER_LABELS, Retriever, answer, list_ollama_models, make_embedder, make_llm,
+from .rag import (PAID_PROVIDERS, PROVIDER_LABELS, CappedLLM, Retriever, answer, list_ollama_models, make_embedder, make_llm,
                   parse_llm_spec)
 from .report import build_report
 
@@ -96,6 +96,9 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     #   ollama:qwen2.5:7b,vertex    one local model plus the cloud default
     # RAG_LLM (a single name) still works. Unknown providers fail at startup, not on a visitor's request.
     methods: dict[str, tuple[object | None, str]] = {"passage": (None, "Original passage")}
+    # Hard stop on paid answers per day (in memory, per instance); 0 turns it off. The cloud side has no
+    # per-request quota to lower for these models, so this is the cap the code controls.
+    daily_limit = int(os.environ.get("LLM_DAILY_LIMIT", "200"))
     specs: list[str] = []
     for spec in (os.environ.get("RAG_LLMS") or os.environ.get("RAG_LLM") or "").replace(" ", "").split(","):
         if not spec or spec.lower() == "none":
@@ -106,6 +109,8 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
             continue
         llm = make_llm(spec)
         provider = parse_llm_spec(spec)[0]
+        if provider in PAID_PROVIDERS and daily_limit > 0:
+            llm = CappedLLM(llm, daily_limit)
         methods[spec] = (llm, f"{PROVIDER_LABELS.get(provider, provider)}: {llm.model}")
     # Models that exist but are switched off here (for example a local model that runs on the author's
     # own computer). They are listed so visitors can see them, but they cannot be called.

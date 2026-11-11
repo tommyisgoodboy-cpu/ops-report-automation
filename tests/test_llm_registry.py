@@ -54,6 +54,35 @@ class SpecTests(unittest.TestCase):
         self.assertEqual(rag.list_ollama_models(host="http://127.0.0.1:1", timeout=1), [])
 
 
+class CappedLLMTests(unittest.TestCase):
+    class Inner:
+        model = "m"
+
+        def generate(self, prompt):
+            return "ok"
+
+    def test_allows_up_to_the_limit_then_refuses(self):
+        capped = rag.CappedLLM(self.Inner(), 2)
+        self.assertEqual([capped.generate("x"), capped.generate("x")], ["ok", "ok"])
+        with self.assertRaises(RuntimeError) as ctx:
+            capped.generate("x")
+        self.assertIn("Daily limit of 2", str(ctx.exception))
+
+    def test_the_count_resets_on_a_new_day(self):
+        import datetime
+
+        day = [datetime.date(2026, 11, 11)]
+        capped = rag.CappedLLM(self.Inner(), 1, today=lambda: day[0])
+        capped.generate("x")
+        with self.assertRaises(RuntimeError):
+            capped.generate("x")
+        day[0] = datetime.date(2026, 11, 12)
+        self.assertEqual(capped.generate("x"), "ok")
+
+    def test_model_name_is_passed_through_for_the_dropdown_label(self):
+        self.assertEqual(rag.CappedLLM(self.Inner(), 1).model, "m")
+
+
 class VertexLocationTests(unittest.TestCase):
     def test_gemini_defaults_to_the_global_location_and_the_working_model(self):
         with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "us-central1"}):
@@ -137,6 +166,36 @@ class ApiRegistryTests(unittest.TestCase):
             r = client.post("/ask", json={"question": "printer offline", "method": long_id})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["mode"], "generated")
+
+    def test_paid_provider_is_capped_in_the_api_and_falls_back_to_the_passage(self):
+        class Fake:
+            def __init__(self, model=None):
+                self.model = model or "fake"
+
+            def generate(self, prompt):
+                return "paid answer [1]"
+
+        with mock.patch.dict(os.environ, {"RAG_LLMS": "vertex", "LLM_DAILY_LIMIT": "2"}), \
+             mock.patch.dict(rag.LLM_PROVIDERS, {"vertex": Fake}):
+            client = TestClient(create_app(n_tickets=10))
+            modes = [client.post("/ask", json={"question": "printer offline", "method": "vertex"}).json()["mode"]
+                     for _ in range(4)]
+        self.assertEqual(modes, ["generated", "generated", "extractive", "extractive"])
+
+    def test_local_models_are_not_capped(self):
+        class Fake:
+            def __init__(self, model=None):
+                self.model = model or "fake"
+
+            def generate(self, prompt):
+                return "local answer [1]"
+
+        with mock.patch.dict(os.environ, {"RAG_LLMS": "ollama", "LLM_DAILY_LIMIT": "1"}), \
+             mock.patch.dict(rag.LLM_PROVIDERS, {"ollama": Fake}):
+            client = TestClient(create_app(n_tickets=10))
+            modes = [client.post("/ask", json={"question": "printer offline", "method": "ollama"}).json()["mode"]
+                     for _ in range(3)]
+        self.assertEqual(modes, ["generated"] * 3)
 
     def test_unknown_provider_fails_at_startup(self):
         with mock.patch.dict(os.environ, {"RAG_LLMS": "nope"}):
