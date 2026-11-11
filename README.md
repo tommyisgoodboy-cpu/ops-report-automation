@@ -197,7 +197,8 @@ gcloud run deploy ops-report --source . --region asia-east2 --allow-unauthentica
 - **Never expose Ollama**: it has no authentication. Keep it on `127.0.0.1`, do not set `OLLAMA_HOST=0.0.0.0`, and do not put a public tunnel in front of it. To show a local model to someone, share the screen, or protect a tunnel with a login and a time limit.
 - **Spend**: the paid model is opt-in per request, the default is the free original passage, and requests are rate limited per client. A determined attacker can rotate addresses, so the real cap must be set on the cloud side (budget alert and a Vertex AI request quota).
 - **Dependencies are pinned** (`requirements.txt`), and the repository and its full git history were scanned for keys, tokens, phone numbers and personal email addresses (none found).
-- **Known gaps**: the service account is the project's default one, not a dedicated least-privilege account; there are no automated dependency alerts yet.
+- **Dependency alerts**: Dependabot checks pip, GitHub Actions and the Docker base image weekly, and CI runs `pip-audit` on the pinned versions on every push.
+- **Known gap**: the Cloud Run service runs as the project's default service account, not a dedicated least-privilege one.
 
 ## Design notes
 

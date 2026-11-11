@@ -1,0 +1,16 @@
+# Weekly checks for new versions and known vulnerabilities. Dependabot opens a pull request;
+# the CI run on that pull request shows whether the upgrade is safe.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
