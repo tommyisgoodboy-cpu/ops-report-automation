@@ -193,7 +193,10 @@ form.addEventListener("submit", async (event) => {
     if (!res.ok) throw new Error("Server returned " + res.status);
     render(await res.json(), method, compareBox.checked);
   } catch (err) {
-    showError(err.message.startsWith("Too many") ? err.message : "Something went wrong: " + err.message);
+    // "Failed to fetch" means the browser never reached the server (stopped, restarted, offline).
+    showError(err instanceof TypeError
+      ? "Cannot reach the server. It may have stopped or restarted: reload the page and try again."
+      : err.message.startsWith("Too many") ? err.message : "Something went wrong: " + err.message);
   } finally {
     button.disabled = false;
     button.textContent = "Ask";

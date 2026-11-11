@@ -176,6 +176,10 @@ class ChatApiTests(unittest.TestCase):
         self.assertNotIn("innerHTML", r.text)  # replies are shown as text, never as HTML
         self.assertIn('href="/chat"', self.client.get("/").text)  # the home page links to it
 
+    def test_both_pages_explain_an_unreachable_server_instead_of_showing_failed_to_fetch(self):
+        for path in ("/", "/chat"):
+            self.assertIn("Cannot reach the server", self.client.get(path).text, path)
+
     def test_chat_is_rate_limited_like_ask(self):
         client = TestClient(create_app(n_tickets=10, rate_limit=2))
         codes = [client.post("/chat", json={"messages": [U("hi")]}).status_code for _ in range(3)]
