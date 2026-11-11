@@ -62,6 +62,8 @@ The image runs as a non-root user and reads `$PORT` (default 8080), so it runs u
 
 ## Deploy to Google Cloud Run
 
+Live demo (synthetic data, scales to zero so the first request can be slow): https://ops-report-1015015901936.asia-east2.run.app/docs
+
 Data is synthetic, so a public demo is safe. Cost is capped by scaling to zero and limiting instances.
 
 ```bash
@@ -95,5 +97,5 @@ Set a budget alert on the billing account first.
 - [ ] Treat overdue open tickets as SLA breaches
 - [ ] HTML report and a scheduled daily run
 - [x] Dockerfile serves the API (tested locally)
-- [ ] Deploy to Cloud Run and publish the URL
+- [x] Deploy to Cloud Run (asia-east2) and publish the URL
 - [ ] Deploy automatically from CI
