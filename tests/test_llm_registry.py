@@ -55,15 +55,17 @@ class SpecTests(unittest.TestCase):
 
 
 class VertexLocationTests(unittest.TestCase):
-    def test_llm_location_can_differ_from_the_embedding_location(self):
-        with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "us-central1", "VERTEX_LLM_LOCATION": "global"}):
-            self.assertEqual(rag.VertexGemini().location, "global")
-            self.assertEqual(rag.VertexEmbedder().location, "us-central1")
-
-    def test_llm_location_falls_back_to_the_shared_setting(self):
-        with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "asia-southeast1"}, clear=False):
+    def test_gemini_defaults_to_the_global_location_and_the_working_model(self):
+        with mock.patch.dict(os.environ, {"VERTEX_LOCATION": "us-central1"}):
             os.environ.pop("VERTEX_LLM_LOCATION", None)
-            self.assertEqual(rag.VertexGemini().location, "asia-southeast1")
+            os.environ.pop("VERTEX_LLM_MODEL", None)
+            gemini = rag.VertexGemini()
+            self.assertEqual((gemini.model, gemini.location), ("gemini-3.8-flash", "global"))
+            self.assertEqual(rag.VertexEmbedder().location, "us-central1")  # embeddings stay regional
+
+    def test_llm_location_can_be_overridden_separately(self):
+        with mock.patch.dict(os.environ, {"VERTEX_LLM_LOCATION": "us-east5"}):
+            self.assertEqual(rag.VertexGemini().location, "us-east5")
 
 
 class VertexUrlTests(unittest.TestCase):

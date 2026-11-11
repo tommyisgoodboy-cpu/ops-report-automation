@@ -222,12 +222,12 @@ def build_prompt(question: str, hits: list[tuple[Chunk, float]]) -> str:
 class VertexGemini:
     """Text generation with a Gemini model on Vertex AI (no API key on Cloud Run)."""
 
+    # gemini-3.8-flash is served only from the `global` location on this project; older names such as
+    # gemini-2.5-flash and the regional locations returned 404. The embedding model is regional,
+    # which is why the LLM has its own location setting.
     def __init__(self, model: str | None = None, location: str | None = None):
-        self.model = model or os.environ.get("VERTEX_LLM_MODEL", "gemini-2.5-flash")
-        # Newer Gemini models are served from the `global` location, while the embedding model is
-        # regional, so the two have separate settings: VERTEX_LLM_LOCATION falls back to VERTEX_LOCATION.
-        self.location = (location or os.environ.get("VERTEX_LLM_LOCATION")
-                         or os.environ.get("VERTEX_LOCATION", "us-central1"))
+        self.model = model or os.environ.get("VERTEX_LLM_MODEL", "gemini-3.8-flash")
+        self.location = location or os.environ.get("VERTEX_LLM_LOCATION", "global")
 
     def generate(self, prompt: str) -> str:
         project = gcp.project_id()
