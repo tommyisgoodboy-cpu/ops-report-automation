@@ -1,0 +1,15 @@
+[
+  {"id": "why-follow-up",      "history": [["user","VPN keeps dropping every few minutes"],["assistant","Check the Wi-Fi signal and update the VPN client."]], "q": "點解會咁?",                        "action": "search", "expect": "VPN keeps disconnecting"},
+  {"id": "what-next",          "history": [["user","printer shows offline"],["assistant","Check the printer is powered on."]],                     "q": "if that doesn't work, what next?", "action": "search", "expect": "Printer shows offline"},
+  {"id": "locked-account",     "history": [["user","我唔記得密碼"],["assistant","先確認身份,再解鎖帳戶。"]],                                    "q": "咁個戶口鎖咗又點算?",                 "action": "search", "expect": "Locked account or forgotten password"},
+  {"id": "topic-switch",       "history": [["user","laptop will not power on"],["assistant","Check the charger."]],                                  "q": "咁部螢幕閃閃下呢?",                   "action": "search", "expect": "Monitor flickers or has no signal"},
+  {"id": "related-topic",      "history": [["user","VPN keeps dropping"],["assistant","Check the Wi-Fi signal."]],                                  "q": "what about the Wi-Fi itself?",    "action": "search", "expect": "Wi-Fi keeps dropping"},
+  {"id": "toner",              "history": [["user","printer shows offline"],["assistant","Restart the print spooler."]],                             "q": "and the toner?",                  "action": "search", "expect": "Paper jam or toner problems"},
+  {"id": "standalone-cantonese","history": [],                                                                                                         "q": "打印機連唔到",                       "action": "search", "expect": "Printer shows offline"},
+  {"id": "greeting-english",   "history": [],                                                                                                         "q": "HI How are u",                    "action": "chat"},
+  {"id": "greeting-cantonese", "history": [],                                                                                                         "q": "你好",                             "action": "chat"},
+  {"id": "thanks-cantonese",   "history": [["user","VPN 成日斷線"],["assistant","檢查 Wi-Fi 信號。"]],                                              "q": "多謝",                             "action": "chat"},
+  {"id": "thanks-english",     "history": [["user","Excel crashes"],["assistant","Start Excel in safe mode."]],                                     "q": "thanks!",                         "action": "chat"},
+  {"id": "who-are-you",        "history": [["user","VPN keeps dropping"],["assistant","Check the Wi-Fi signal."]],                                  "q": "who are you?",                    "action": "chat"},
+  {"id": "unrelated",          "history": [],                                                                                                         "q": "how to bake bread",               "action": "any", "expect_no_sources": true}
+]

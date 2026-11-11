@@ -7,9 +7,9 @@ Turns raw IT-support tickets into a daily operations report (volume by category,
 | Layer | What |
 |---|---|
 | Data and report | Synthetic tickets, SQLite, plain SQL, Markdown report, rule-based classifier |
-| API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, plus a small web page at `/` |
+| API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, `/chat` (multi-turn), plus web pages at `/` and `/chat` |
 | RAG | Chunking, embeddings (TF-IDF, bge-m3 via Ollama, or Vertex AI), cosine retrieval, sources, refusal, measured on labelled questions |
-| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 68 tests |
+| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 100+ tests |
 
 > **All data is synthetic.** Tickets are generated with a fixed random seed. No real customer, employer or government data is used or stored.
 >
@@ -110,6 +110,30 @@ Caveats, stated plainly:
 - The refuse thresholds (0.5 for bge-m3, 0.57 for Vertex) sit in the gap between the weakest correct match and the strongest out-of-scope match **on these same questions**. They are tuned on the evaluation set and need fresh questions to confirm.
 - **A score threshold alone cannot separate chit-chat from real questions.** With Vertex, "hi" scored 0.54 and "help" 0.60, while the weakest correct match was 0.60. I checked whether the gap between the top and third result would help: it does not, because some real questions have a gap as small as 0.02. What I did instead: questions shorter than 5 characters get "please describe the problem" without searching, and the Vertex threshold went from 0.52 to 0.57. Longer vague messages (for example "help me please") can still return a weak match. A proper fix needs an intent check or an LLM judging whether the passage answers the question.
 - bge-m3 still misses one question ("I can't sign in to my PC" returns the VPN article; the right one is in its top 3).
+
+### Chat (several turns with memory)
+
+`POST /chat` and the page at `/chat` keep a conversation. The browser sends the last few messages on every call, so the server stores nothing. One turn is three steps:
+
+1. **Plan**: is the last message small talk or an IT question? For a question, write one standalone search query that carries the missing context ("why?" becomes "why does the VPN keep dropping?"). With a model this is one JSON call; without one, simple rules do it (greetings and thanks are small talk, short or follow-up messages borrow the previous question).
+2. **Retrieve** with that query.
+3. **Answer** with the model, citing sources, or return the original passage.
+
+Small talk never searches. A model that fails or returns unusable JSON falls back to the rules, and the JSON is validated (unknown actions are rejected, lengths are cut). The conversation is treated as untrusted text in the prompt. With a paid model a turn costs up to two calls, and both count toward the daily cap.
+
+Measured on 13 labelled conversations (`eval/conversations.json`, `python -m ops_report.chat_eval`): follow-ups ("why?", "what next?"), a topic switch, small talk in English and Cantonese, and an unrelated question. Retrieval: bge-m3.
+
+| | Rules only | Qwen 2.5 7B plans the turn |
+|---|---:|---:|
+| overall | 85% | **92%** |
+| follow-up and topic-switch questions | 71% | **86%** |
+| small talk | 100% | 100% |
+| unrelated | 100% | 100% |
+
+What I learned, and the limits:
+- My first Qwen prompt scored **77%, worse than the rules**: it rewrote English questions into (Taiwan-style) Chinese and dragged the old topic into new ones. A stricter prompt (same language as the last message, ignore the old topic when the device changes) reached 92%. I wrote that prompt after seeing these 13 cases, so treat 92% as an upper bound, not a benchmark.
+- The rules fail when the topic changes, because they always borrow the previous question. I tried searching the last message alone first and keeping it when it matched confidently. It fixed two cases and broke one, and it failed outright with TF-IDF (a vague "what next?" matched an unrelated article), so I removed it instead of shipping a heuristic tuned on this set.
+- Still missed with Qwen: "and the toner?" (the query became a generic printer-ink question that found the wrong passage).
 
 ### Web page: choosing how the answer is written
 

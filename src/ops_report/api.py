@@ -17,11 +17,12 @@ from . import db
 from .classify import classify
 from .data import generate_tickets
 from .ratelimit import RateLimiter, make_limit_dependency
-from .rag import (PAID_PROVIDERS, PROVIDER_LABELS, CappedLLM, Retriever, answer, list_ollama_models, make_embedder, make_llm,
-                  parse_llm_spec)
+from .rag import (MAX_HISTORY_MESSAGES, PAID_PROVIDERS, PROVIDER_LABELS, CappedLLM, Retriever, answer, chat_turn,
+                  list_ollama_models, make_embedder, make_llm, parse_llm_spec)
 from .report import build_report
 
 WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
+CHAT_PAGE = (Path(__file__).parent / "web" / "chat.html").read_text(encoding="utf-8")
 
 Priority = Literal["P1", "P2", "P3", "P4"]
 Status = Literal["Open", "Resolved"]
@@ -57,6 +58,27 @@ class AskOut(BaseModel):
     mode: Literal["extractive", "generated"]
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=300)
+
+
+class ChatIn(BaseModel):
+    # The client sends the conversation on every call; the server keeps no state. Oldest first, last = user.
+    messages: list[ChatMessage] = Field(min_length=1, max_length=12)
+    method: str = Field("passage", min_length=1, max_length=80)
+    k: int = Field(3, ge=1, le=5)
+
+
+class ChatOut(BaseModel):
+    reply: str
+    action: Literal["chat", "search"]
+    query: str  # the standalone question that was actually searched
+    passage: str
+    sources: list[Source]
+    mode: Literal["extractive", "generated"]
+
+
 def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = None) -> FastAPI:
     """Build an app with its own in-memory DB of synthetic tickets.
 
@@ -71,7 +93,7 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
-        if request.url.path == "/":  # the demo page only; /docs (Swagger UI) loads its own assets
+        if request.url.path in ("/", "/chat"):  # the demo pages only; /docs (Swagger UI) loads its own assets
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
@@ -129,6 +151,10 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     def home() -> str:
         return WEB_PAGE
 
+    @app.get("/chat", response_class=HTMLResponse, include_in_schema=False)
+    def chat_page() -> str:
+        return CHAT_PAGE
+
     @app.get("/health")
     def health() -> dict:
         return {
@@ -174,6 +200,21 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
             return answer(body.question, retriever, k=body.k, llm=methods[body.method][0])
         except RuntimeError as exc:  # e.g. the embedding service is unreachable
             logging.getLogger(__name__).error("ask failed: %s", exc)
+            raise HTTPException(status_code=503, detail="Retrieval service temporarily unavailable") from exc
+
+    @app.post("/chat", response_model=ChatOut, dependencies=[limited])
+    def chat(body: ChatIn) -> dict:
+        if body.messages[-1].role != "user":
+            raise HTTPException(status_code=422, detail="The last message must be from the user")
+        if body.method in switched_off:
+            raise HTTPException(status_code=400, detail="This model is switched off. Ask the author to switch it on.")
+        if body.method not in methods:
+            raise HTTPException(status_code=400, detail=f"Unknown answer method. Use one of: {', '.join(methods)}")
+        messages = [m.model_dump() for m in body.messages][-(MAX_HISTORY_MESSAGES + 1):]
+        try:
+            return chat_turn(messages, retriever, llm=methods[body.method][0], k=body.k)
+        except RuntimeError as exc:  # e.g. the embedding service is unreachable
+            logging.getLogger(__name__).error("chat failed: %s", exc)
             raise HTTPException(status_code=503, detail="Retrieval service temporarily unavailable") from exc
 
     return app

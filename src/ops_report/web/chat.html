@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IT Support Chat</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e2e5ea; --accent:#2f5fd0; --warn:#b54708; --ok:#067647; --me:#e8eefc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --text:#e8ebf0; --muted:#9aa4b2; --line:#2c323c; --accent:#7aa2ff; --warn:#f0a35e; --ok:#5fd39a; --me:#243053; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; display:flex; flex-direction:column; min-height:100vh; }
+  header { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 16px; }
+  h1 { font-size:1.3rem; margin:0; }
+  a { color:var(--accent); }
+  .sub { color:var(--muted); margin:4px 0 12px; font-size:.92rem; }
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-bottom:12px; font-size:.9rem; color:var(--muted); }
+  select, input[type="text"] { padding:10px 12px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  select { padding:5px 9px; font-size:.9rem; }
+  button { padding:10px 16px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); font-weight:500; padding:5px 12px; font-size:.9rem; }
+  button:disabled { opacity:.6; cursor:wait; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #log { flex:1; display:flex; flex-direction:column; gap:10px; padding:4px 0 12px; }
+  .msg { max-width:88%; padding:10px 14px; border:1px solid var(--line); border-radius:14px; white-space:pre-wrap; background:var(--card); }
+  .msg.me { align-self:flex-end; background:var(--me); border-color:transparent; }
+  .msg.bot { align-self:flex-start; }
+  .meta { display:flex; flex-wrap:wrap; gap:4px 8px; margin-top:6px; font-size:.78rem; color:var(--muted); }
+  .badge { padding:1px 8px; border:1px solid var(--line); border-radius:999px; }
+  .badge.ai { color:var(--ok); border-color:var(--ok); }
+  .badge.warn { color:var(--warn); border-color:var(--warn); }
+  details { margin-top:6px; font-size:.85rem; color:var(--muted); white-space:normal; }
+  details ul { margin:4px 0 0; padding-left:18px; }
+  form { display:flex; gap:8px; position:sticky; bottom:0; padding-top:8px; background:var(--bg); }
+  input[type="text"] { flex:1; min-width:0; }
+  .err { color:var(--warn); }
+  .hint { color:var(--muted); font-size:.82rem; margin-top:14px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>IT Support Chat</h1>
+    <a href="/">Single question mode</a>
+  </header>
+  <p class="sub">Ask in English or Cantonese. I remember the last few messages, so you can follow up with "why?" or "what next?".</p>
+
+  <div class="bar">
+    <label>Answer by <select id="method" aria-label="How the answer is written"></select></label>
+    <button type="button" id="reset" class="ghost">New chat</button>
+  </div>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="form">
+    <input id="q" type="text" maxlength="300" required autocomplete="off" placeholder="Type a message" aria-label="Your message">
+    <button id="send" type="submit">Send</button>
+  </form>
+
+  <p class="hint" id="hint">Demo with synthetic data. Only the last few messages are used.</p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log"), form = $("form"), input = $("q"), send = $("send"), methodSel = $("method"), hint = $("hint");
+const labels = {};
+let messages = [];   // what the server sees: [{role, content}], oldest first
+
+function bubble(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + (role === "user" ? "me" : "bot");
+  div.textContent = text;          // textContent: shown literally, never parsed as HTML
+  log.appendChild(div);
+  div.scrollIntoView({ block: "end", behavior: "smooth" });
+  return div;
+}
+
+function addMeta(div, data, method) {
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const tag = (text, cls) => { const b = document.createElement("span"); b.className = "badge " + (cls || ""); b.textContent = text; meta.appendChild(b); };
+  const asked = method !== "passage";
+  if (data.action === "chat") tag(data.mode === "generated" ? "AI generated · " + labels[method] : "Small talk", data.mode === "generated" ? "ai" : "");
+  else if (data.mode === "generated") tag("AI generated · " + labels[method], "ai");
+  else if (asked && data.sources.length) tag("AI unavailable, showing the original passage", "warn");
+  else tag(data.sources.length ? "Original passage" : "No match", "");
+  if (data.action === "search" && data.query) { const q = document.createElement("span"); q.textContent = "Searched: " + data.query; meta.appendChild(q); }
+  div.appendChild(meta);
+  if (data.sources.length) {
+    const d = document.createElement("details");
+    const s = document.createElement("summary"); s.textContent = "Sources (" + data.sources.length + ")"; d.appendChild(s);
+    const ul = document.createElement("ul");
+    data.sources.forEach((x) => { const li = document.createElement("li"); li.textContent = `${x.doc} — ${x.heading} (score ${x.score})`; ul.appendChild(li); });
+    d.appendChild(ul); div.appendChild(d);
+  }
+}
+
+function reset() {
+  messages = []; log.replaceChildren();
+  bubble("assistant", "Hi! Describe an IT problem, for example \"VPN keeps disconnecting\". 你可以用廣東話問。");
+}
+
+fetch("/health").then((r) => r.json()).then((h) => {
+  (h.answer_methods || []).forEach((m) => {
+    labels[m.id] = m.label;
+    const o = document.createElement("option");
+    o.value = m.id; o.disabled = m.available === false;
+    o.textContent = m.available === false ? m.label + " (switched off: ask me to start it)" : m.label;
+    methodSel.appendChild(o);
+  });
+  const how = h.embedder === "tfidf" ? "Retrieval is TF-IDF." : "Retrieval uses neural embeddings (" + h.embedder + ").";
+  hint.textContent = "Demo with synthetic data. " + how + " Only the last few messages are used.";
+  if (h.embedder === "vertex" || (h.answer_methods || []).some((m) => m.id.startsWith("vertex") && m.available !== false)) {
+    hint.textContent += " Messages are processed by Google Cloud (Vertex AI): please do not enter personal or confidential information.";
+  }
+}).catch(() => {});
+
+$("reset").addEventListener("click", reset);
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  const method = methodSel.value || "passage";
+  bubble("user", text);
+  messages.push({ role: "user", content: text });
+  input.value = "";
+  send.disabled = true;
+  const pending = bubble("assistant", method === "passage" ? "Searching…" : "Thinking…");
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: messages.slice(-9), method }),
+    });
+    if (res.status === 429) {
+      const wait = res.headers.get("Retry-After");
+      throw new Error("Too many requests. Please wait " + (wait || "a few") + " seconds and try again.");
+    }
+    if (!res.ok) throw new Error("Server returned " + res.status);
+    const data = await res.json();
+    pending.textContent = data.reply;
+    addMeta(pending, data, method);
+    messages.push({ role: "assistant", content: data.reply.slice(0, 300) });
+  } catch (err) {
+    pending.textContent = err.message.startsWith("Too many") ? err.message : "Something went wrong: " + err.message;
+    pending.classList.add("err");
+    messages.pop();   // the failed question is not part of the conversation
+  } finally {
+    send.disabled = false;
+    input.focus();
+  }
+});
+
+reset();
+</script>
+</body>
+</html>
