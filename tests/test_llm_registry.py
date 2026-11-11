@@ -54,6 +54,48 @@ class SpecTests(unittest.TestCase):
         self.assertEqual(rag.list_ollama_models(host="http://127.0.0.1:1", timeout=1), [])
 
 
+class GeminiResponseTests(unittest.TestCase):
+    def run_generate(self, result):
+        with mock.patch("ops_report.rag.gcp.post_json", return_value=result) as post, \
+             mock.patch("ops_report.rag.gcp.project_id", return_value="p"):
+            text = None
+            try:
+                text = rag.VertexGemini().generate("prompt")
+            except RuntimeError as exc:
+                text = exc
+        return text, post
+
+    def test_request_asks_for_low_thinking_and_leaves_room_for_the_answer(self):
+        _, post = self.run_generate({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]})
+        config = post.call_args.args[1]["generationConfig"]
+        self.assertGreaterEqual(config["maxOutputTokens"], 1024)
+        self.assertEqual(config["thinkingConfig"], {"thinkingLevel": "low"})
+
+    def test_a_complete_answer_is_returned(self):
+        text, _ = self.run_generate({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": " done "}]}}]})
+        self.assertEqual(text, "done")
+
+    def test_an_answer_cut_off_by_the_token_limit_is_an_error_not_half_an_answer(self):
+        result = {"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": [{"text": "1. **Check"}]}}]}
+        text, _ = self.run_generate(result)
+        self.assertIsInstance(text, RuntimeError)
+        self.assertIn("MAX_TOKENS", str(text))
+
+    def test_thinking_can_be_switched_off_for_models_that_reject_the_setting(self):
+        with mock.patch.dict(os.environ, {"VERTEX_LLM_THINKING_LEVEL": "off"}):
+            _, post = self.run_generate({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "x"}]}}]})
+        self.assertNotIn("thinkingConfig", post.call_args.args[1]["generationConfig"])
+
+    def test_a_local_answer_cut_off_by_length_is_an_error(self):
+        with mock.patch("urllib.request.urlopen", return_value=Resp({"response": "half an ans", "done_reason": "length"})):
+            with self.assertRaises(RuntimeError):
+                rag.OllamaLLM().generate("prompt")
+
+    def test_the_prompt_asks_for_plain_text(self):
+        prompt = rag.build_prompt("q", rag.Retriever().search("vpn drops"))
+        self.assertIn("plain text only", prompt)
+
+
 class CappedLLMTests(unittest.TestCase):
     class Inner:
         model = "m"
