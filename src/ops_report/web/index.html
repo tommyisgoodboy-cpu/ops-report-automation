@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IT Support Assistant</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e2e5ea; --accent:#2f5fd0; --warn:#b54708; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --text:#e8ebf0; --muted:#9aa4b2; --line:#2c323c; --accent:#7aa2ff; --warn:#f0a35e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:680px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  form { display:flex; gap:8px; }
+  input { flex:1; min-width:0; padding:12px 14px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button { padding:12px 18px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  .card { margin-top:20px; padding:16px 18px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .card h2 { font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  .card h2:not(:first-child) { margin-top:16px; }
+  #answer { margin:0; white-space:pre-wrap; }
+  #sources { margin:0; padding-left:18px; color:var(--muted); font-size:.92rem; }
+  .none { color:var(--warn); }
+  .hint { margin-top:24px; color:var(--muted); font-size:.85rem; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>IT Support Assistant</h1>
+  <p class="sub">Ask a troubleshooting question. Answers come from a small knowledge base and always show their sources.</p>
+
+  <form id="form">
+    <input id="q" name="q" maxlength="300" required autocomplete="off"
+           placeholder="e.g. VPN keeps dropping" aria-label="Your question">
+    <button id="go" type="submit">Ask</button>
+  </form>
+
+  <section id="result" class="card" hidden aria-live="polite">
+    <h2>Answer</h2>
+    <p id="answer"></p>
+    <h2 id="srcTitle">Sources</h2>
+    <ul id="sources"></ul>
+  </section>
+
+  <p class="hint">Demo with synthetic data. Retrieval is TF-IDF, so it matches words rather than meaning. See the README.</p>
+</main>
+
+<script>
+const form = document.getElementById("form");
+const input = document.getElementById("q");
+const button = document.getElementById("go");
+const result = document.getElementById("result");
+const answer = document.getElementById("answer");
+const sources = document.getElementById("sources");
+const srcTitle = document.getElementById("srcTitle");
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();            // stop the browser reloading the page
+  button.disabled = true;
+  button.textContent = "Searching…";
+  try {
+    const res = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: input.value.trim() }),
+    });
+    if (!res.ok) throw new Error("Server returned " + res.status);
+    const data = await res.json();
+
+    // textContent shows the text literally, so it is never parsed or run as HTML.
+    answer.textContent = data.answer;
+    answer.classList.toggle("none", data.sources.length === 0);
+    sources.replaceChildren(...data.sources.map((s) => {
+      const li = document.createElement("li");
+      li.textContent = `${s.doc} — ${s.heading} (score ${s.score})`;
+      return li;
+    }));
+    srcTitle.hidden = data.sources.length === 0;
+    result.hidden = false;
+  } catch (err) {
+    answer.textContent = "Something went wrong: " + err.message;
+    answer.classList.add("none");
+    sources.replaceChildren();
+    srcTitle.hidden = true;
+    result.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Ask";
+  }
+});
+</script>
+</body>
+</html>

@@ -16,6 +16,14 @@ class ApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(create_app(n_tickets=100, seed=5))
 
+    def test_home_page_is_html_with_form(self):
+        r = self.client.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers["content-type"])
+        self.assertIn('id="form"', r.text)
+        self.assertIn("/ask", r.text)
+        self.assertNotIn("innerHTML", r.text)  # answers must be shown as text, not HTML
+
     def test_health(self):
         r = self.client.get("/health")
         self.assertEqual(r.status_code, 200)

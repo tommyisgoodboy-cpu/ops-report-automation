@@ -32,6 +32,7 @@ PYTHONPATH=src uvicorn ops_report.api:app --reload
 
 | Endpoint | What it does |
 |---|---|
+| `GET /` | A small web page with a question box that calls `/ask` |
 | `GET /health` | Liveness check |
 | `GET /report` | The Markdown operations report |
 | `GET /tickets?category=&priority=&status=&limit=` | Filter tickets (parameterised SQL, validated inputs) |
@@ -72,6 +73,26 @@ The image runs as a non-root user and reads `$PORT` (default 8080), so it runs u
 5. `build_prompt()` shows how the same hits would be passed to an LLM with a "use only this context, cite sources" instruction. No LLM is called yet.
 
 **Known limitation (on purpose, and tested by hand):** TF-IDF matches words, not meaning. "I can't sign in to my PC" retrieves a virtual-desktop *login* article instead of the locked-account article, because it shares a word and not the idea. The `Embedder` interface exists so a neural embedding model (for example a local `bge-m3` via Ollama, or a hosted API) can replace it without touching retrieval or the API. Next step: swap it in and compare accuracy on a small labelled question set, the same way the classifier is compared with its baseline.
+
+### Measuring retrieval
+
+`eval/questions.json` holds 17 labelled questions: 5 literal, 9 paraphrased, 3 out of scope. Run:
+
+```bash
+PYTHONPATH=src python -m ops_report.rag_eval
+```
+
+Baseline (TF-IDF):
+
+| Metric | Result |
+|---|---|
+| top-1, answerable questions | 64% (9/14) |
+| top-1, literal wording | 100% (5/5) |
+| top-1, paraphrased wording | 44% (4/9) |
+| top-3, answerable questions | 79% |
+| refuses out-of-scope questions | 100% (3/3) |
+
+Caveats: 17 questions is a small set, and I wrote them while looking at the knowledge base, so the paraphrase score is probably optimistic. Real user questions should replace them over time. `evaluate()` takes any `Retriever`, so a neural embedder can be measured on the same questions.
 
 ## Deploy to Google Cloud Run
 

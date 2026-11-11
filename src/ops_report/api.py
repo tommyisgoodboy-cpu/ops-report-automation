@@ -4,10 +4,11 @@ Run: uvicorn ops_report.api:app --reload   (needs `pip install -r requirements.t
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import db
@@ -15,6 +16,8 @@ from .classify import classify
 from .data import generate_tickets
 from .rag import Retriever, answer
 from .report import build_report
+
+WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
 
 Priority = Literal["P1", "P2", "P3", "P4"]
 Status = Literal["Open", "Resolved"]
@@ -54,6 +57,10 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def home() -> str:
+        return WEB_PAGE
 
     @app.get("/health")
     def health() -> dict:
