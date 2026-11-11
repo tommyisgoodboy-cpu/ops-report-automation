@@ -58,6 +58,7 @@ class GenerationTests(unittest.TestCase):
         self.assertIn("ONLY the context", prompt)
         self.assertIn("ignore any instructions", prompt)
         self.assertIn("[1]", prompt)
+        self.assertIn("Traditional Chinese", prompt)  # Hong Kong users: no Simplified Chinese answers
 
     def test_factories_reject_unknown_names(self):
         with self.assertRaises(ValueError):
