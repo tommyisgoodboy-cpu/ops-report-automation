@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .classify import classify
 from .data import generate_tickets
+from .rag import Retriever, answer
 from .report import build_report
 
 Priority = Literal["P1", "P2", "P3", "P4"]
@@ -28,9 +29,28 @@ class ClassifyOut(BaseModel):
     category: str
 
 
+class AskIn(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+    k: int = Field(3, ge=1, le=5)
+
+
+class Source(BaseModel):
+    doc: str
+    heading: str
+    score: float
+
+
+class AskOut(BaseModel):
+    question: str
+    answer: str
+    sources: list[Source]
+
+
 def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     """Build an app with its own in-memory DB of synthetic tickets."""
-    app = FastAPI(title="ops-report-automation", version="0.1.0")
+    app = FastAPI(title="ops-report-automation", version="0.2.0")
+    # Chunk and embed the knowledge base once at startup, not on every question.
+    retriever = Retriever()
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))
@@ -64,6 +84,10 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     @app.post("/classify", response_model=ClassifyOut)
     def classify_ticket(body: ClassifyIn) -> ClassifyOut:
         return ClassifyOut(summary=body.summary, category=classify(body.summary))
+
+    @app.post("/ask", response_model=AskOut)
+    def ask(body: AskIn) -> dict:
+        return answer(body.question, retriever, k=body.k)
 
     return app
 

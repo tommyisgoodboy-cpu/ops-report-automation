@@ -51,6 +51,22 @@ class ApiTests(unittest.TestCase):
     def test_classify_rejects_empty(self):
         self.assertEqual(self.client.post("/classify", json={"summary": ""}).status_code, 422)
 
+    def test_ask_returns_answer_with_sources(self):
+        r = self.client.post("/ask", json={"question": "printer says offline"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("Printer shows offline", body["answer"])
+        self.assertEqual(body["sources"][0]["doc"], "printer.md")
+
+    def test_ask_unknown_topic_says_do_not_know(self):
+        body = self.client.post("/ask", json={"question": "how to bake bread"}).json()
+        self.assertIn("do not know", body["answer"].lower())
+        self.assertEqual(body["sources"], [])
+
+    def test_ask_validates_input(self):
+        self.assertEqual(self.client.post("/ask", json={"question": ""}).status_code, 422)
+        self.assertEqual(self.client.post("/ask", json={"question": "vpn", "k": 99}).status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()
