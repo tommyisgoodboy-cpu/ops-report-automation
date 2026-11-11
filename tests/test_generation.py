@@ -4,7 +4,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ops_report.rag import Retriever, answer, build_prompt, make_embedder, make_llm  # noqa: E402
+import json
+from unittest import mock
+
+from ops_report.rag import OllamaLLM, Retriever, answer, build_prompt, make_embedder, make_llm  # noqa: E402
 
 
 class FakeLLM:
@@ -63,6 +66,28 @@ class GenerationTests(unittest.TestCase):
             make_llm("nope")
         self.assertIsNone(make_llm(None))
         self.assertIsNone(make_embedder(None))
+
+    def test_ollama_llm_returns_text_and_strips_think_blocks(self):
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self, *a):
+                return json.dumps({"response": "<think>hmm</think>Restart the spooler [1]."}).encode()
+
+        with mock.patch("urllib.request.urlopen", return_value=Resp()):
+            self.assertEqual(OllamaLLM().generate("prompt"), "Restart the spooler [1].")
+
+    def test_ollama_llm_unreachable_gives_helpful_error(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            OllamaLLM(host="http://127.0.0.1:1", timeout=1).generate("x")
+        self.assertIn("ollama serve", str(ctx.exception))
+
+    def test_make_llm_knows_ollama(self):
+        self.assertIsInstance(make_llm("ollama"), OllamaLLM)
 
 
 if __name__ == "__main__":

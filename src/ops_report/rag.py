@@ -232,14 +232,46 @@ class VertexGemini:
         return "".join(p.get("text", "") for p in parts).strip()
 
 
+class OllamaLLM:
+    """Text generation with a local open model through Ollama (default: Qwen 2.5 7B).
+
+    Needs `ollama serve` running on the same machine, so it works locally but not on Cloud Run.
+    """
+
+    def __init__(self, model: str | None = None, host: str = "http://localhost:11434", timeout: float = 120.0):
+        self.model = model or os.environ.get("OLLAMA_LLM_MODEL", "qwen2.5:7b")
+        self.host, self.timeout = host.rstrip("/"), timeout
+
+    def generate(self, prompt: str) -> str:
+        request = urllib.request.Request(
+            f"{self.host}/api/generate",
+            data=json.dumps({
+                "model": self.model, "prompt": prompt, "stream": False,
+                "options": {"temperature": 0, "num_predict": 400},
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                text = json.load(response)["response"]
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Cannot reach Ollama at {self.host}. Start `ollama serve` and run `ollama pull {self.model}`."
+            ) from exc
+        # Some reasoning models print their thinking in <think> tags; keep only the answer.
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+
+
 def make_llm(name: str | None = None):
-    """None / 'none' = extractive answers only; 'vertex' = Gemini on Vertex AI."""
+    """None / 'none' = extractive answers only; 'vertex' = Gemini on Vertex AI; 'ollama' = local model."""
     name = (name or "none").lower()
     if name == "vertex":
         return VertexGemini()
+    if name == "ollama":
+        return OllamaLLM()
     if name == "none":
         return None
-    raise ValueError(f"Unknown LLM {name!r}; use none or vertex")
+    raise ValueError(f"Unknown LLM {name!r}; use none, vertex or ollama")
 
 
 def answer(question: str, retriever: Retriever, k: int = 3, llm=None) -> dict:

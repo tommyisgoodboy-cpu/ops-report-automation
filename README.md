@@ -115,7 +115,7 @@ Caveats, stated plainly:
 | Variable | Values | Effect |
 |---|---|---|
 | `RAG_EMBEDDER` | `tfidf` (default), `ollama`, `vertex` | How chunks and questions become vectors |
-| `RAG_LLM` | `none` (default), `vertex` | `none` returns the best passage; `vertex` has Gemini write the answer from the retrieved passages, with `[1]` citations |
+| `RAG_LLM` | `none` (default), `vertex`, `ollama` | `none` returns the best passage; `vertex` (Gemini, cloud) or `ollama` (local Qwen) writes the answer from the retrieved passages, with `[1]` citations. `ollama` only works where Ollama runs, so not on Cloud Run |
 
 - **No keys in code.** On Cloud Run the service gets a short-lived token from the metadata server for its service account. Locally it uses `gcloud auth print-access-token`. The service account needs `roles/aiplatform.user`.
 - **The service keeps working if a dependency fails.** If the chosen embedder cannot start, it falls back to TF-IDF and `/health` reports which embedder is active. If the LLM call fails, the answer falls back to the best passage (`"mode": "extractive"`). A retrieval failure during a question returns 503.
