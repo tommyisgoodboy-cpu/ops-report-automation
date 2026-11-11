@@ -65,6 +65,7 @@ class ApiTests(unittest.TestCase):
         body = r.json()
         self.assertIn("Printer shows offline", body["answer"])
         self.assertEqual(body["sources"][0]["doc"], "printer.md")
+        self.assertEqual(body["mode"], "extractive")  # default build has no LLM
 
     def test_ask_unknown_topic_says_do_not_know(self):
         body = self.client.post("/ask", json={"question": "how to bake bread"}).json()

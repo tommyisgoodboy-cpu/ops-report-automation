@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from .rag import OllamaEmbedder, Retriever
+from .rag import Retriever, make_embedder
 
 QUESTIONS = Path(__file__).resolve().parents[2] / "eval" / "questions.json"
 
@@ -51,12 +51,12 @@ def evaluate(retriever: Retriever, questions: list[dict], k: int = 3) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--embedder", choices=["tfidf", "ollama"], default="tfidf")
+    parser.add_argument("--embedder", choices=["tfidf", "ollama", "vertex"], default="tfidf")
     parser.add_argument("--min-score", type=float, default=None, help="override the refuse threshold")
     args = parser.parse_args(argv)
 
     questions = json.loads(QUESTIONS.read_text(encoding="utf-8"))
-    embedder = OllamaEmbedder() if args.embedder == "ollama" else None
+    embedder = make_embedder(args.embedder)
     result = evaluate(Retriever(embedder=embedder, min_score=args.min_score), questions)
     for r in result["rows"]:
         mark = "OK  " if r["top1"] else "MISS"
