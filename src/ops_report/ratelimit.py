@@ -13,12 +13,13 @@ Limits of this design (on purpose, to keep it small):
 from __future__ import annotations
 
 import math
+import os
 import threading
 import time
 from collections import OrderedDict, deque
 from typing import Callable
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 
 
 class RateLimiter:
@@ -70,15 +71,19 @@ def client_ip(request: Request, trust_proxy: bool) -> str:
 def make_limit_dependency(limiter: RateLimiter | None, trust_proxy: bool = False):
     """FastAPI dependency: raises 429 when the caller is over the limit. None = disabled."""
 
-    def limit(request: Request) -> None:
+    def limit(request: Request, response: Response) -> None:
         if limiter is None:
             return
+        debug = {}
+        if os.environ.get("RATE_LIMIT_DEBUG") == "1":  # TEMPORARY: echo what the proxy really sends
+            debug = {"X-Debug-Client": f"xff=[{request.headers.get('x-forwarded-for', '')}] peer=[{request.client.host if request.client else ''}]"}
+            response.headers.update(debug)
         allowed, retry_after = limiter.check(client_ip(request, trust_proxy))
         if not allowed:
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please wait and try again.",
-                headers={"Retry-After": str(retry_after)},
+                headers={"Retry-After": str(retry_after), **debug},
             )
 
     return limit
