@@ -267,7 +267,7 @@ Rolling back further than 5 versions is then not possible. Measured size after 1
 ### Remaining risks
 
 Open, for the owner to do:
-- GitHub Dependabot alerts are not enabled (a repository setting). The weekly Dependabot update PRs and the `pip-audit` step in CI are active.
+- GitHub Dependabot alerts, Dependabot security updates, the dependency graph, secret scanning with push protection, and private vulnerability reporting are all enabled (checked through the GitHub API on 2026-11-11).
 - The project's default compute service account still has the Vertex AI role next to the dedicated runtime account, and it keeps a broad Cloud Build role because source deploys build with it.
 - The budget alert only notifies. Whether the account is still on a free trial (where the credit is the real limit) is not something I could verify.
 - `main` has no branch protection. That is acceptable for one maintainer; add it if others commit.
