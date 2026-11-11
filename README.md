@@ -1,8 +1,19 @@
 # ops-report-automation
 
-Turns raw IT-support tickets into a daily operations report: volume by category, mean time to resolve (MTTR) and SLA breach rate by priority, repeating issues, and the accuracy of a baseline ticket classifier.
+Turns raw IT-support tickets into a daily operations report (volume by category, MTTR and SLA breach rate by priority, repeating issues), serves it over a small HTTP API, and answers troubleshooting questions from a knowledge base with retrieval-augmented generation (RAG).
+
+**Live demo:** https://ops-report-1015015901936.asia-east2.run.app/ (Cloud Run, scales to zero, so the first request can be slow)
+
+| Layer | What |
+|---|---|
+| Data and report | Synthetic tickets, SQLite, plain SQL, Markdown report, rule-based classifier |
+| API | FastAPI: `/report`, `/tickets`, `/classify`, `/ask`, plus a small web page at `/` |
+| RAG | Chunking, embeddings (TF-IDF or bge-m3 via Ollama), cosine retrieval, sources, refusal, measured on labelled questions |
+| Delivery | Docker (non-root), Google Cloud Run, GitHub Actions CI, 28 tests |
 
 > **All data is synthetic.** Tickets are generated with a fixed random seed. No real customer, employer or government data is used or stored.
+>
+> **How it was built:** with an AI coding assistant (Claude Code), reviewed, tested and run by me. The design choices and limits described below are ones I can explain and defend.
 
 ## Why this exists
 
