@@ -23,7 +23,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="form"', r.text)
         self.assertIn("/ask", r.text)
         self.assertNotIn("innerHTML", r.text)  # answers must be shown as text, not HTML
-        for element in ('id="method"', 'id="compare"', 'id="badge"', 'id="cmpPassage"'):
+        for element in ('id="method"', 'id="compare"', 'id="badge"', 'id="cmpPassage"', 'id="aiNote"'):
             self.assertIn(element, r.text)  # model picker, side-by-side comparison and mode label
 
     def test_health(self):

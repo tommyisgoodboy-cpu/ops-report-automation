@@ -113,7 +113,7 @@ Caveats, stated plainly:
 
 ### Web page: choosing how the answer is written
 
-The page at `/` reads `GET /health` and shows only what the server really offers. With nothing configured (the Cloud Run demo) there is just the original passage and the picker is hidden. Locally, `RAG_LLMS=ollama` adds "Local model: qwen2.5:7b" to a dropdown and a **Compare with the original passage** checkbox that shows the two answers side by side. A badge says how the answer was produced: `AI generated`, `Original passage`, `No match`, or a warning when the AI model failed and the original passage was shown instead.
+The page at `/` reads `GET /health` and shows only what the server really offers. With nothing configured (the Cloud Run demo) there is just the original passage, the picker is hidden, and a note tells the visitor that AI-written answers need a local model running on the author's computer, so they should ask for it to be switched on. Locally, `RAG_LLMS=ollama` adds "Local model: qwen2.5:7b" to a dropdown and a **Compare with the original passage** checkbox that shows the two answers side by side. A badge says how the answer was produced: `AI generated`, `Original passage`, `No match`, or a warning when the AI model failed and the original passage was shown instead.
 
 - The picker is not trusted: `POST /ask` takes a `method` and rejects anything not on the server's own list (HTTP 400), so a visitor cannot choose a model the operator did not configure. Choosing a paid model still counts against the rate limit.
 - The embedding model is not selectable per request, because switching it means building a different index.

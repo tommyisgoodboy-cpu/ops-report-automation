@@ -39,6 +39,8 @@
   .pane p { margin:0; white-space:pre-wrap; }
   @media (max-width:560px) { .compare { grid-template-columns:1fr; } form { flex-wrap:wrap; } button { width:100%; } }
   #sources { margin:0; padding-left:18px; color:var(--muted); font-size:.92rem; }
+  .note { margin-top:20px; padding:10px 14px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font-size:.9rem; }
+  .note strong { color:var(--text); }
   .hint { margin-top:24px; color:var(--muted); font-size:.85rem; }
   [hidden] { display:none !important; }
 </style>
@@ -78,6 +80,11 @@
     <ul id="sources"></ul>
   </section>
 
+  <p class="note" id="aiNote" hidden>
+    Want to see AI-written answers? They use a local model (Qwen) that runs on my own computer, so I need to
+    start it first. <strong>Just ask me</strong> and I will switch it on for the demo.
+  </p>
+
   <p class="hint" id="hint">Demo with synthetic data. Answers are the best matching passage from the knowledge base, with sources. See the README.</p>
 </main>
 
@@ -105,6 +112,7 @@ fetch("/health").then((r) => r.json()).then((h) => {
     methodSel.appendChild(opt);
   });
   controls.hidden = list.length < 2;   // only "original passage": nothing to choose or compare
+  $("aiNote").hidden = list.length > 1;  // no AI model running here: tell the visitor how to see one
 }).catch(() => {});
 
 function setBadge(text, kind) {
