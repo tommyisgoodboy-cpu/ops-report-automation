@@ -3,3 +3,4 @@ __pycache__/
 *.db
 report.md
 .DS_Store
+.venv/

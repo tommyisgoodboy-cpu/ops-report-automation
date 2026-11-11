@@ -11,18 +11,35 @@ Support teams spend time building the same daily report by hand. This project sh
 ## Quick start
 
 ```bash
-# Python 3.10+, standard library only
+# Python 3.10+, the CLI uses the standard library only
 PYTHONPATH=src python3 -m ops_report --tickets 300 --seed 42
 cat report.md
 ```
 
-Run the tests:
+Run the tests (API tests need `pip install -r requirements.txt`; without it they are skipped):
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-Run in Docker:
+## HTTP API (FastAPI)
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=src uvicorn ops_report.api:app --reload
+# interactive docs: http://127.0.0.1:8000/docs
+```
+
+| Endpoint | What it does |
+|---|---|
+| `GET /health` | Liveness check |
+| `GET /report` | The Markdown operations report |
+| `GET /tickets?category=&priority=&status=&limit=` | Filter tickets (parameterised SQL, validated inputs) |
+| `POST /classify` `{"summary": "..."}` | Baseline classifier, returns the category |
+
+The API serves its own in-memory set of synthetic tickets (seeded, reproducible).
+
+Run in Docker (CLI report, no extra dependencies):
 
 ```bash
 docker build -t ops-report .
@@ -53,6 +70,7 @@ docker run --rm ops-report
 
 ## Roadmap
 
+- [x] HTTP API (FastAPI) with tests
 - [ ] LLM-based classifier compared with the baseline on the same labels
 - [ ] Treat overdue open tickets as SLA breaches
 - [ ] HTML report and a scheduled daily run

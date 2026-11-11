@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS tickets (
 """
 
 
-def connect(path: str = ":memory:") -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+def connect(path: str = ":memory:", check_same_thread: bool = True) -> sqlite3.Connection:
+    conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     return conn
