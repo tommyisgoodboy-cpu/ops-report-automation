@@ -17,7 +17,7 @@ class RagEvalTests(unittest.TestCase):
 
     def test_question_set_has_all_three_kinds(self):
         kinds = {q["type"] for q in self.questions}
-        self.assertEqual(kinds, {"literal", "paraphrase", "out_of_scope"})
+        self.assertEqual(kinds, {"literal", "paraphrase", "cantonese", "out_of_scope"})
 
     def test_expected_headings_exist_in_the_knowledge_base(self):
         headings = {c.heading for c in Retriever().chunks}

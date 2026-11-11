@@ -1,21 +1,117 @@
 [
-  {"type": "literal",    "q": "VPN keeps dropping every few minutes",      "expect": "VPN keeps disconnecting"},
-  {"type": "literal",    "q": "printer shows offline",                     "expect": "Printer shows offline"},
-  {"type": "literal",    "q": "forgot my password and account is locked",  "expect": "Locked account or forgotten password"},
-  {"type": "literal",    "q": "laptop will not power on",                  "expect": "Laptop will not power on"},
-  {"type": "literal",    "q": "Excel crashes when I open it",              "expect": "Excel or Outlook crashes"},
-
-  {"type": "paraphrase", "q": "wireless keeps cutting out",                "expect": "Wi-Fi keeps dropping"},
-  {"type": "paraphrase", "q": "I can't sign in to my PC",                  "expect": "Locked account or forgotten password"},
-  {"type": "paraphrase", "q": "my screen goes black and flashes",          "expect": "Monitor flickers or has no signal"},
-  {"type": "paraphrase", "q": "my virtual machine is sluggish",            "expect": "Slow virtual machine"},
-  {"type": "paraphrase", "q": "the printer jammed",                        "expect": "Paper jam or toner problems"},
-  {"type": "paraphrase", "q": "I need access to a team shared folder",     "expect": "Mailbox or shared folder permission"},
-  {"type": "paraphrase", "q": "I cannot install the new program",          "expect": "Application update or installation fails"},
-  {"type": "paraphrase", "q": "cannot reach the company network from home","expect": "VPN cannot connect at all"},
-  {"type": "paraphrase", "q": "my laptop is dead and will not turn on",    "expect": "Laptop will not power on"},
-
-  {"type": "out_of_scope", "q": "how to bake bread",                       "expect": null},
-  {"type": "out_of_scope", "q": "what is the capital of France",           "expect": null},
-  {"type": "out_of_scope", "q": "best pizza near me",                      "expect": null}
+  {
+    "type": "literal",
+    "q": "VPN keeps dropping every few minutes",
+    "expect": "VPN keeps disconnecting"
+  },
+  {
+    "type": "literal",
+    "q": "printer shows offline",
+    "expect": "Printer shows offline"
+  },
+  {
+    "type": "literal",
+    "q": "forgot my password and account is locked",
+    "expect": "Locked account or forgotten password"
+  },
+  {
+    "type": "literal",
+    "q": "laptop will not power on",
+    "expect": "Laptop will not power on"
+  },
+  {
+    "type": "literal",
+    "q": "Excel crashes when I open it",
+    "expect": "Excel or Outlook crashes"
+  },
+  {
+    "type": "paraphrase",
+    "q": "wireless keeps cutting out",
+    "expect": "Wi-Fi keeps dropping"
+  },
+  {
+    "type": "paraphrase",
+    "q": "I can't sign in to my PC",
+    "expect": "Locked account or forgotten password"
+  },
+  {
+    "type": "paraphrase",
+    "q": "my screen goes black and flashes",
+    "expect": "Monitor flickers or has no signal"
+  },
+  {
+    "type": "paraphrase",
+    "q": "my virtual machine is sluggish",
+    "expect": "Slow virtual machine"
+  },
+  {
+    "type": "paraphrase",
+    "q": "the printer jammed",
+    "expect": "Paper jam or toner problems"
+  },
+  {
+    "type": "paraphrase",
+    "q": "I need access to a team shared folder",
+    "expect": "Mailbox or shared folder permission"
+  },
+  {
+    "type": "paraphrase",
+    "q": "I cannot install the new program",
+    "expect": "Application update or installation fails"
+  },
+  {
+    "type": "paraphrase",
+    "q": "cannot reach the company network from home",
+    "expect": "VPN cannot connect at all"
+  },
+  {
+    "type": "paraphrase",
+    "q": "my laptop is dead and will not turn on",
+    "expect": "Laptop will not power on"
+  },
+  {
+    "type": "cantonese",
+    "q": "VPN 成日斷線",
+    "expect": "VPN keeps disconnecting"
+  },
+  {
+    "type": "cantonese",
+    "q": "打印機連唔到",
+    "expect": "Printer shows offline"
+  },
+  {
+    "type": "cantonese",
+    "q": "我唔記得密碼,個戶口被鎖咗",
+    "expect": "Locked account or forgotten password"
+  },
+  {
+    "type": "cantonese",
+    "q": "部電腦開唔着機",
+    "expect": "Laptop will not power on"
+  },
+  {
+    "type": "cantonese",
+    "q": "Excel 一開就 crash",
+    "expect": "Excel or Outlook crashes"
+  },
+  {
+    "type": "cantonese",
+    "q": "個螢幕閃閃下,時有時無",
+    "expect": "Monitor flickers or has no signal"
+  },
+  {
+    "type": "out_of_scope",
+    "q": "how to bake bread",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "what is the capital of France",
+    "expect": null
+  },
+  {
+    "type": "out_of_scope",
+    "q": "best pizza near me",
+    "expect": null
+  }
 ]

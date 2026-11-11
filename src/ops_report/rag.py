@@ -7,8 +7,11 @@ without changing the retrieval or API code.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
+import urllib.error
+import urllib.request
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,12 +53,19 @@ def tokenize(text: str) -> list[str]:
     return [w for w in _WORD.findall(text.lower()) if w not in _STOP]
 
 
+Vector = "dict[str, float] | list[float]"  # sparse (TF-IDF) or dense (neural model)
+
+
 class Embedder(Protocol):
-    def embed(self, texts: list[str]) -> list[dict[str, float]]: ...
+    default_min_score: float  # scores below this mean "not relevant"; scales differ per model
+
+    def embed(self, texts: list[str]) -> list: ...
 
 
 class TfidfEmbedder:
     """Sparse TF-IDF vectors as {word: weight}. Fit on the corpus, then embed anything."""
+
+    default_min_score = 0.05
 
     def __init__(self, corpus: list[str]):
         n = len(corpus)
@@ -73,24 +83,64 @@ class TfidfEmbedder:
         return vectors
 
 
-def cosine(a: dict[str, float], b: dict[str, float]) -> float:
+class OllamaEmbedder:
+    """Dense neural embeddings from a local Ollama server (default model: bge-m3, multilingual).
+
+    Needs `ollama serve` running and `ollama pull bge-m3`. Nothing leaves the machine.
+    """
+
+    # bge-m3 gives unrelated text a similarity of roughly 0.3-0.5, so the cut-off is much
+    # higher than for TF-IDF. Tuned on the labelled questions in eval/ (see README caveat).
+    default_min_score = 0.5
+
+    def __init__(self, model: str = "bge-m3", host: str = "http://localhost:11434", timeout: float = 60.0):
+        self.model, self.host, self.timeout = model, host.rstrip("/"), timeout
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        request = urllib.request.Request(
+            f"{self.host}/api/embed",
+            data=json.dumps({"model": self.model, "input": texts}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                vectors = json.load(response)["embeddings"]
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Cannot reach Ollama at {self.host}. Start it with `ollama serve` "
+                f"and run `ollama pull {self.model}`."
+            ) from exc
+        return [_normalise(v) for v in vectors]
+
+
+def _normalise(vec: list[float]) -> list[float]:
+    norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+    return [x / norm for x in vec]
+
+
+def cosine(a, b) -> float:
     """Vectors are already normalised, so the dot product is the cosine similarity."""
-    if len(a) > len(b):
-        a, b = b, a
-    return sum(v * b.get(w, 0.0) for w, v in a.items())
+    if isinstance(a, dict):  # sparse
+        if len(a) > len(b):
+            a, b = b, a
+        return sum(v * b.get(w, 0.0) for w, v in a.items())
+    return sum(x * y for x, y in zip(a, b))  # dense
 
 
 class Retriever:
-    def __init__(self, chunks: list[Chunk] | None = None, embedder: Embedder | None = None):
+    def __init__(self, chunks: list[Chunk] | None = None, embedder: Embedder | None = None,
+                 min_score: float | None = None):
         self.chunks = chunks if chunks is not None else load_chunks()
         texts = [f"{c.heading}. {c.text}" for c in self.chunks]
         self.embedder = embedder or TfidfEmbedder(texts)
+        self.min_score = self.embedder.default_min_score if min_score is None else min_score
         self.vectors = self.embedder.embed(texts)
 
-    def search(self, question: str, k: int = 3, min_score: float = 0.05) -> list[tuple[Chunk, float]]:
+    def search(self, question: str, k: int = 3, min_score: float | None = None) -> list[tuple[Chunk, float]]:
+        threshold = self.min_score if min_score is None else min_score
         q = self.embedder.embed([question])[0]
         scored = [(c, cosine(q, v)) for c, v in zip(self.chunks, self.vectors)]
-        scored = [(c, s) for c, s in scored if s >= min_score]
+        scored = [(c, s) for c, s in scored if s >= threshold]
         return sorted(scored, key=lambda cs: cs[1], reverse=True)[:k]
 
 

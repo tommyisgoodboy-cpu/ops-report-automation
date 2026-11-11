@@ -4,6 +4,7 @@ Run: uvicorn ops_report.api:app --reload   (needs `pip install -r requirements.t
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .classify import classify
 from .data import generate_tickets
-from .rag import Retriever, answer
+from .rag import OllamaEmbedder, Retriever, answer
 from .report import build_report
 
 WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
@@ -53,7 +54,9 @@ def create_app(n_tickets: int = 300, seed: int = 42) -> FastAPI:
     """Build an app with its own in-memory DB of synthetic tickets."""
     app = FastAPI(title="ops-report-automation", version="0.2.0")
     # Chunk and embed the knowledge base once at startup, not on every question.
-    retriever = Retriever()
+    # RAG_EMBEDDER=ollama switches to neural embeddings (needs a local Ollama); default is TF-IDF.
+    embedder = OllamaEmbedder() if os.environ.get("RAG_EMBEDDER") == "ollama" else None
+    retriever = Retriever(embedder=embedder)
     # check_same_thread=False: FastAPI runs sync endpoints in a thread pool.
     conn = db.connect(check_same_thread=False)
     db.load(conn, generate_tickets(n=n_tickets, seed=seed))

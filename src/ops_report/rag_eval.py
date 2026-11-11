@@ -1,6 +1,6 @@
 """Measure retrieval quality against a small labelled question set.
 
-Run: PYTHONPATH=src python -m ops_report.rag_eval
+Run: PYTHONPATH=src python -m ops_report.rag_eval [--embedder ollama] [--min-score 0.5]
 
 Metrics
 - top1:   the first retrieved chunk is the expected one (answerable questions)
@@ -9,11 +9,12 @@ Metrics
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
-from .rag import Retriever
+from .rag import OllamaEmbedder, Retriever
 
 QUESTIONS = Path(__file__).resolve().parents[2] / "eval" / "questions.json"
 
@@ -43,13 +44,20 @@ def evaluate(retriever: Retriever, questions: list[dict], k: int = 3) -> dict:
         "top3": rate(answerable, "top3"),
         "top1_literal": rate(lambda r: r["type"] == "literal", "top1"),
         "top1_paraphrase": rate(lambda r: r["type"] == "paraphrase", "top1"),
+        "top1_cantonese": rate(lambda r: r["type"] == "cantonese", "top1"),
         "refuse": rate(lambda r: r["expect"] is None, "top1"),
     }
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--embedder", choices=["tfidf", "ollama"], default="tfidf")
+    parser.add_argument("--min-score", type=float, default=None, help="override the refuse threshold")
+    args = parser.parse_args(argv)
+
     questions = json.loads(QUESTIONS.read_text(encoding="utf-8"))
-    result = evaluate(Retriever(), questions)
+    embedder = OllamaEmbedder() if args.embedder == "ollama" else None
+    result = evaluate(Retriever(embedder=embedder, min_score=args.min_score), questions)
     for r in result["rows"]:
         mark = "OK  " if r["top1"] else "MISS"
         want = r["expect"] or "(refuse)"
@@ -59,6 +67,7 @@ def main() -> int:
     print(f"top-1 (answerable)   : {result['top1']:.0%}")
     print(f"  literal questions  : {result['top1_literal']:.0%}")
     print(f"  paraphrased        : {result['top1_paraphrase']:.0%}")
+    print(f"  Cantonese / mixed  : {result['top1_cantonese']:.0%}")
     print(f"top-3 (answerable)   : {result['top3']:.0%}")
     print(f"refuses out-of-scope : {result['refuse']:.0%}")
     return 0

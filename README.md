@@ -76,23 +76,29 @@ The image runs as a non-root user and reads `$PORT` (default 8080), so it runs u
 
 ### Measuring retrieval
 
-`eval/questions.json` holds 17 labelled questions: 5 literal, 9 paraphrased, 3 out of scope. Run:
+`eval/questions.json` holds 20 labelled questions: 5 literal, 9 paraphrased, 6 Cantonese or mixed Chinese/English, plus 3 out of scope. Run:
 
 ```bash
-PYTHONPATH=src python -m ops_report.rag_eval
+PYTHONPATH=src python -m ops_report.rag_eval                    # TF-IDF baseline
+PYTHONPATH=src python -m ops_report.rag_eval --embedder ollama  # neural embeddings
 ```
 
-Baseline (TF-IDF):
+| Metric | TF-IDF | bge-m3 (Ollama) |
+|---|---:|---:|
+| top-1, answerable (17) | 55% | **95%** |
+| literal wording | 100% | 100% |
+| paraphrased wording | 44% | **89%** |
+| Cantonese / mixed | 33% | **100%** |
+| top-3, answerable | 65% | **100%** |
+| refuses out-of-scope (3) | 100% | 100% |
 
-| Metric | Result |
-|---|---|
-| top-1, answerable questions | 64% (9/14) |
-| top-1, literal wording | 100% (5/5) |
-| top-1, paraphrased wording | 44% (4/9) |
-| top-3, answerable questions | 79% |
-| refuses out-of-scope questions | 100% (3/3) |
+TF-IDF cannot read Chinese at all (its tokenizer keeps only `[a-z0-9]`), and it scores unrelated paraphrases at zero. `bge-m3` is multilingual, so a Cantonese question finds the English article.
 
-Caveats: 17 questions is a small set, and I wrote them while looking at the knowledge base, so the paraphrase score is probably optimistic. Real user questions should replace them over time. `evaluate()` takes any `Retriever`, so a neural embedder can be measured on the same questions.
+Caveats, stated plainly:
+- 20 questions is small, and I wrote them while looking at the knowledge base, so treat the numbers as direction, not a benchmark.
+- The refuse threshold for `bge-m3` (0.5) sits in the gap between the weakest correct match (0.54) and the strongest out-of-scope match (0.36) **on these same questions**. It is tuned on the evaluation set and needs fresh questions to confirm.
+- One question still fails at top-1: "I can't sign in to my PC" returns the VPN article (the right one is in the top 3).
+- The Cloud Run demo still uses TF-IDF, because the container has no Ollama. To use neural embeddings locally: `ollama pull bge-m3`, then `RAG_EMBEDDER=ollama PYTHONPATH=src uvicorn ops_report.api:app`.
 
 ## Deploy to Google Cloud Run
 
@@ -128,7 +134,8 @@ Set a budget alert on the billing account first.
 
 - [x] HTTP API (FastAPI) with tests
 - [x] RAG baseline (TF-IDF retrieval, sources, refuses unknown topics)
-- [ ] Neural embeddings + labelled question set to measure retrieval accuracy
+- [x] Neural embeddings (bge-m3 via Ollama) compared with TF-IDF on a labelled question set
+- [ ] Neural embeddings in the deployed service (hosted embedding API or a container with a model)
 - [ ] LLM answer generation on top of retrieval
 - [ ] LLM-based classifier compared with the baseline on the same labels
 - [ ] Treat overdue open tickets as SLA breaches
