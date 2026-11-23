@@ -74,3 +74,5 @@ def post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:400]
         raise RuntimeError(f"Google API error {exc.code}: {detail}") from exc
+    except (urllib.error.URLError, OSError) as exc:  # network down, DNS failure, read timeout
+        raise RuntimeError(f"Google API unreachable: {exc}") from exc

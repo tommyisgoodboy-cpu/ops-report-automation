@@ -245,5 +245,24 @@ class ApiRegistryTests(unittest.TestCase):
                 create_app(n_tickets=10)
 
 
+
+class NetworkFailureTests(unittest.TestCase):
+    """A network failure must surface as RuntimeError so the API can fall back or answer 503, not crash with a 500."""
+
+    def test_google_post_json_turns_network_errors_into_runtime_error(self):
+        import urllib.error
+        for exc in (urllib.error.URLError("dns"), TimeoutError("read timed out")):
+            with mock.patch("ops_report.gcp.access_token", return_value="t"), \
+                 mock.patch("urllib.request.urlopen", side_effect=exc):
+                with self.assertRaises(RuntimeError):
+                    gcp.post_json("https://example.invalid", {})
+
+    def test_ollama_read_timeout_is_a_runtime_error(self):
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+            with self.assertRaises(RuntimeError):
+                rag.OllamaEmbedder().embed(["x"])
+            with self.assertRaises(RuntimeError):
+                rag.OllamaLLM().generate("x")
+
 if __name__ == "__main__":
     unittest.main()

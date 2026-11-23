@@ -112,7 +112,7 @@ class OllamaEmbedder:
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 vectors = json.load(response)["embeddings"]
-        except urllib.error.URLError as exc:
+        except OSError as exc:  # URLError is an OSError; this also covers a read timeout
             raise RuntimeError(
                 f"Cannot reach Ollama at {self.host}. Start it with `ollama serve` "
                 f"and run `ollama pull {self.model}`."
@@ -322,7 +322,7 @@ class OllamaLLM:
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 data = json.load(response)
-        except urllib.error.URLError as exc:
+        except OSError as exc:  # URLError is an OSError; this also covers a read timeout
             raise RuntimeError(
                 f"Cannot reach Ollama at {self.host}. Start `ollama serve` and run `ollama pull {self.model}`."
             ) from exc
