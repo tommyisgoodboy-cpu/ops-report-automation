@@ -19,6 +19,9 @@
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-bottom:12px; font-size:.9rem; color:var(--muted); }
   select, input[type="text"] { padding:10px 12px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
   select { padding:5px 9px; font-size:.9rem; }
+  /* long option text ("switched off: ...") must not widen the page on phones */
+  .bar label { display:flex; align-items:center; gap:6px; min-width:0; max-width:100%; }
+  .bar select { min-width:0; max-width:100%; }
   button { padding:10px 16px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
   button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); font-weight:500; padding:5px 12px; font-size:.9rem; }
   button:disabled { opacity:.6; cursor:wait; }

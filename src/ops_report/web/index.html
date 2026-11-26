@@ -22,8 +22,9 @@
   button { padding:12px 18px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
   button:disabled { opacity:.6; cursor:wait; }
   .controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin-top:12px; font-size:.92rem; color:var(--muted); }
-  .controls label { display:flex; align-items:center; gap:8px; }
-  .controls select { padding:6px 10px; font-size:.92rem; }
+  .controls label { display:flex; align-items:center; gap:8px; min-width:0; max-width:100%; }
+  /* long option text ("switched off: ...") must not widen the page on phones */
+  .controls select { padding:6px 10px; font-size:.92rem; min-width:0; max-width:100%; }
   .card { margin-top:20px; padding:16px 18px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
   .card h2 { font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
   .card h2:not(:first-child) { margin-top:16px; }
@@ -177,6 +178,8 @@ function showError(message) {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();            // stop the browser reloading the page
+  const question = input.value.trim();
+  if (!question) { input.value = ""; input.reportValidity(); return; }  // "required" lets spaces through
   const method = methodSel.value || "passage";
   button.disabled = true;
   button.textContent = method === "passage" ? "Searching…" : "Thinking…";
@@ -184,7 +187,7 @@ form.addEventListener("submit", async (event) => {
     const res = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: input.value.trim(), method }),
+      body: JSON.stringify({ question, method }),
     });
     if (res.status === 429) {
       const wait = res.headers.get("Retry-After");
