@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import db
@@ -23,6 +23,8 @@ from .report import build_report
 
 WEB_PAGE = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
 CHAT_PAGE = (Path(__file__).parent / "web" / "chat.html").read_text(encoding="utf-8")
+# Browser tab icons and the link preview image: a fixed list, never a path taken from the request.
+ASSETS = {"favicon.ico": "image/x-icon", "icon.svg": "image/svg+xml", "apple-icon.png": "image/png", "og.jpg": "image/jpeg"}
 
 Priority = Literal["P1", "P2", "P3", "P4"]
 Status = Literal["Open", "Resolved"]
@@ -79,6 +81,15 @@ class ChatOut(BaseModel):
     mode: Literal["extractive", "generated"]
 
 
+def _asset(name: str, media_type: str):
+    path = Path(__file__).parent / "web" / name
+
+    def serve() -> FileResponse:
+        return FileResponse(path, media_type=media_type)
+
+    return serve
+
+
 def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = None) -> FastAPI:
     """Build an app with its own in-memory DB of synthetic tickets.
 
@@ -97,7 +108,7 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-                "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                "connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
             )
         return response
     if rate_limit is None:
@@ -161,6 +172,9 @@ def create_app(n_tickets: int = 300, seed: int = 42, rate_limit: int | None = No
     @app.get("/chat", response_class=HTMLResponse, include_in_schema=False)
     def chat_page() -> str:
         return CHAT_PAGE
+
+    for asset, media_type in ASSETS.items():
+        app.add_api_route(f"/{asset}", _asset(asset, media_type), include_in_schema=False)
 
     @app.get("/health")
     def health() -> dict:
